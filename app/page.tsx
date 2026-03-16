@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 type ToolMode = "bruise" | "erase" | null;
 type PassIndex = 0 | 1 | 2;
 type SavedMask = Uint8ClampedArray | null;
+
 type BruiseAgeKey =
   | "unknown"
   | "within24h"
@@ -19,17 +20,33 @@ type StageKey = "red" | "blue" | "purple" | "brown" | "yellow" | "resolved";
 type ConsistencyLabel = "Low" | "Moderate" | "High";
 type IntensityLabel = "Mild" | "Moderate" | "Strong" | "Very Strong";
 
+type StageConfidenceItem = {
+  key: StageKey;
+  label: string;
+  score: number;
+};
+
+type HealingStageUI = {
+  slot: 1 | 2 | 3 | 4 | 5;
+  shortLabel: "S1" | "S2" | "S3" | "S4" | "S5";
+  title: string;
+  description: string;
+};
+
 type AnalysisResult = {
   stageKey: StageKey;
   stageLabel: string;
   stageSummaryLines: string[];
   stageContextLine?: string;
   stageProgressPercent: number;
+  stageConfidenceAll: StageConfidenceItem[];
+  stageConfidenceTop: StageConfidenceItem[];
   consistencyLabel: ConsistencyLabel;
-  consistencyTitle: string;
   consistencyMeaningLines: string[];
+  consistencyScore: number;
   intensityLabel: IntensityLabel;
   intensityLines: string[];
+  intensityScore: number;
   consensusPixels: number;
   refinedCount: number;
   avgR: number;
@@ -41,8 +58,6 @@ type AnalysisResult = {
 };
 
 const FRAME_SIZE = 560;
-const PASS_LABELS = ["Tight", "Balanced", "Broad"] as const;
-const STAGE_FLOW = ["Red", "Blue", "Purple", "Brown", "Yellow", "Resolved"] as const;
 const PAN_PADDING = 80;
 
 const DEFAULT_ZOOM = 1;
@@ -53,9 +68,11 @@ const ERASE_BRUSH_MAX = 70;
 const DEFAULT_BRUISE_BRUSH = (BRUISE_BRUSH_MIN + BRUISE_BRUSH_MAX) / 2;
 const DEFAULT_ERASE_BRUSH = (ERASE_BRUSH_MIN + ERASE_BRUSH_MAX) / 2;
 
+const PASS_LABELS = ["Tight", "Balanced", "Broad"] as const;
+
 const AGE_OPTIONS: { key: BruiseAgeKey; label: string }[] = [
   { key: "unknown", label: "Unknown" },
-  { key: "within24h", label: "Within 24 hours" },
+  { key: "within24h", label: "Within 24h" },
   { key: "day1to2", label: "1–2 days" },
   { key: "day3to4", label: "3–4 days" },
   { key: "day5to7", label: "5–7 days" },
@@ -63,6 +80,36 @@ const AGE_OPTIONS: { key: BruiseAgeKey; label: string }[] = [
   { key: "day11to13", label: "11–13 days" },
   { key: "day14plus", label: "14+ days" },
 ];
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function formatScore(value: number) {
+  return `${value.toFixed(2)} / 1.00`;
+}
+
+function stageDisplayLabel(key: StageKey) {
+  return {
+    red: "Red",
+    blue: "Blue",
+    purple: "Purple",
+    brown: "Brown",
+    yellow: "Yellow",
+    resolved: "Resolved",
+  }[key];
+}
+
+function stageColor(key: StageKey) {
+  return {
+    red: "#d74236",
+    blue: "#2e59d9",
+    purple: "#a041ea",
+    brown: "#ac6838",
+    yellow: "#e0a635",
+    resolved: "#c9c9c9",
+  }[key];
+}
 
 function rgbToHsv(r: number, g: number, b: number) {
   const rn = r / 255;
@@ -95,8 +142,72 @@ function rgbToHsv(r: number, g: number, b: number) {
   return { h, s, v };
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
+function softmaxStageScores(
+  scores: Record<StageKey, number>,
+  temperature = 0.78
+): Record<StageKey, number> {
+  const entries = Object.entries(scores) as Array<[StageKey, number]>;
+  const maxScore = Math.max(...entries.map(([, score]) => score));
+  const expValues = entries.map(([key, score]) => [
+    key,
+    Math.exp((score - maxScore) / temperature),
+  ]) as Array<[StageKey, number]>;
+
+  const total = expValues.reduce((sum, [, value]) => sum + value, 0) || 1;
+
+  return Object.fromEntries(
+    expValues.map(([key, value]) => [key, clamp(value / total, 0, 1)])
+  ) as Record<StageKey, number>;
+}
+
+function getHealingStageUI(stageKey: StageKey): HealingStageUI {
+  if (stageKey === "red") {
+    return {
+      slot: 1,
+      shortLabel: "S1",
+      title: "Early Red stage",
+      description:
+        "The current visual pattern is most consistent with the early red stage of bruise healing. Actual timing may vary depending on skin tone, lighting conditions, and bruise depth.",
+    };
+  }
+
+  if (stageKey === "blue" || stageKey === "purple") {
+    return {
+      slot: 2,
+      shortLabel: "S2",
+      title: "Blue Purple stage",
+      description:
+        "The current visual pattern is most consistent with the blue purple stage of bruise healing. Actual timing may vary depending on skin tone, lighting conditions, and bruise depth.",
+    };
+  }
+
+  if (stageKey === "brown") {
+    return {
+      slot: 3,
+      shortLabel: "S3",
+      title: "Brown Green transition stage",
+      description:
+        "The current visual pattern is most consistent with the brown green transition stage of bruise healing. Actual timing may vary depending on skin tone, lighting conditions, and bruise depth.",
+    };
+  }
+
+  if (stageKey === "yellow") {
+    return {
+      slot: 4,
+      shortLabel: "S4",
+      title: "Yellow stage",
+      description:
+        "The current visual pattern is most consistent with the yellow stage of bruise healing. Actual timing may vary depending on skin tone, lighting conditions, and bruise depth.",
+    };
+  }
+
+  return {
+    slot: 5,
+    shortLabel: "S5",
+    title: "Resolved stage",
+    description:
+      "The visible bruise signal appears faint overall and is most consistent with a near-resolved stage. Actual timing may vary depending on skin tone, lighting conditions, and bruise depth.",
+  };
 }
 
 export default function Home() {
@@ -516,13 +627,12 @@ export default function Home() {
     for (let y = 0; y < FRAME_SIZE; y += 2) {
       for (let x = 0; x < FRAME_SIZE; x += 2) {
         const i = (y * FRAME_SIZE + x) * 4;
-
         if (maskImg[i + 3] >= 10) {
-          overlayCtx.fillStyle = "rgba(87, 55, 204, 0.16)";
+          overlayCtx.fillStyle = "rgba(101, 79, 206, 0.16)";
           overlayCtx.fillRect(x, y, 2, 2);
 
           if (x % 6 === 0 && y % 6 === 0) {
-            overlayCtx.fillStyle = "rgba(113, 74, 221, 0.34)";
+            overlayCtx.fillStyle = "rgba(124, 95, 218, 0.34)";
             overlayCtx.beginPath();
             overlayCtx.arc(x + 1, y + 1, 0.7, 0, Math.PI * 2);
             overlayCtx.fill();
@@ -669,18 +779,24 @@ export default function Home() {
     const consistencyValue = computeSelectionConsistency(refinedSelections);
     const consistencyLabel = getConsistencyLabel(consistencyValue);
 
-    let consensusPixels = 0;
-    let sumR = 0;
-    let sumG = 0;
-    let sumB = 0;
-
-    const selectedPixels: Array<{
+    const allPixels: Array<{
       r: number;
       g: number;
       b: number;
+      h: number;
+      s: number;
+      v: number;
       lum: number;
       idx: number;
     }> = [];
+
+    let consensusPixels = 0;
+    let roiSumR = 0;
+    let roiSumG = 0;
+    let roiSumB = 0;
+    let roiSumS = 0;
+    let roiSumV = 0;
+    let roiLumSum = 0;
 
     for (let i = 0; i < consensus.length; i++) {
       if (!consensus[i]) continue;
@@ -689,13 +805,18 @@ export default function Home() {
       const r = roiData[p];
       const g = roiData[p + 1];
       const b = roiData[p + 2];
-      const lum = getLuminance(r, g, b);
+      const { h, s, v } = rgbToHsv(r, g, b);
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
       consensusPixels++;
-      sumR += r;
-      sumG += g;
-      sumB += b;
-      selectedPixels.push({ r, g, b, lum, idx: i });
+      roiSumR += r;
+      roiSumG += g;
+      roiSumB += b;
+      roiSumS += s;
+      roiSumV += v;
+      roiLumSum += lum;
+
+      allPixels.push({ r, g, b, h, s, v, lum, idx: i });
     }
 
     if (consensusPixels < 20) {
@@ -703,11 +824,48 @@ export default function Home() {
       return;
     }
 
-    const avgR = Math.round(sumR / consensusPixels);
-    const avgG = Math.round(sumG / consensusPixels);
-    const avgB = Math.round(sumB / consensusPixels);
+    const roiMeanV = roiSumV / consensusPixels;
+    const roiMeanLum = roiLumSum / consensusPixels;
 
-    const sortedByLum = [...selectedPixels].sort((a, b) => a.lum - b.lum);
+    const isRedHue = (h: number) => h <= 18 || h >= 342;
+    const isBlueHue = (h: number) => h >= 195 && h <= 245;
+    const isPurpleHue = (h: number) => h > 245 && h <= 320;
+    const isBrownHue = (h: number) => h > 18 && h <= 42;
+    const isYellowHue = (h: number) => h > 42 && h <= 70;
+
+    const bruiseLikePixels = allPixels.filter((px) => {
+      const resolvedLike = px.s < 0.16 && px.v > Math.max(0.62, roiMeanV - 0.02);
+      const strongChromatic =
+        (isRedHue(px.h) ||
+          isBlueHue(px.h) ||
+          isPurpleHue(px.h) ||
+          isBrownHue(px.h) ||
+          isYellowHue(px.h)) &&
+        px.s >= 0.09;
+      const darkCool = px.h >= 215 && px.h <= 320 && px.v <= roiMeanV + 0.02;
+      return resolvedLike || strongChromatic || darkCool;
+    });
+
+    const stagePixels =
+      bruiseLikePixels.length >= Math.max(24, Math.floor(allPixels.length * 0.24))
+        ? bruiseLikePixels
+        : allPixels;
+
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+
+    for (const px of stagePixels) {
+      sumR += px.r;
+      sumG += px.g;
+      sumB += px.b;
+    }
+
+    const avgR = Math.round(sumR / stagePixels.length);
+    const avgG = Math.round(sumG / stagePixels.length);
+    const avgB = Math.round(sumB / stagePixels.length);
+
+    const sortedByLum = [...stagePixels].sort((a, b) => a.lum - b.lum);
     const coreCount = Math.max(24, Math.floor(sortedByLum.length * 0.35));
     const corePixels = sortedByLum.slice(0, coreCount);
 
@@ -715,129 +873,238 @@ export default function Home() {
     let coreG = 0;
     let coreB = 0;
     let coreLumSum = 0;
+    let coreSSum = 0;
 
     for (const px of corePixels) {
       coreR += px.r;
       coreG += px.g;
       coreB += px.b;
       coreLumSum += px.lum;
+      coreSSum += px.s;
     }
 
     const coreAvgR = Math.round(coreR / corePixels.length);
     const coreAvgG = Math.round(coreG / corePixels.length);
     const coreAvgB = Math.round(coreB / corePixels.length);
     const coreMeanLum = coreLumSum / corePixels.length;
+    const coreMeanS = coreSSum / corePixels.length;
+
+    let redWeight = 0;
+    let blueWeight = 0;
+    let purpleWeight = 0;
+    let brownWeight = 0;
+    let yellowWeight = 0;
+    let resolvedWeight = 0;
+
+    for (const px of stagePixels) {
+      const redDom = (px.r - (px.g + px.b) / 2) / 255;
+      const blueDom = (px.b - (px.r + px.g) / 2) / 255;
+      const purpleDom = ((px.r + px.b) / 2 - px.g) / 255;
+      const warmDom = ((px.r + px.g) / 2 - px.b) / 255;
+
+      const resolvedLike = px.s < 0.16 && px.v > Math.max(0.62, roiMeanV - 0.02);
+      if (resolvedLike) resolvedWeight += 0.9 + clamp(px.v - 0.58, 0, 0.4);
+
+      if (isRedHue(px.h) && px.s >= 0.12) {
+        redWeight +=
+          0.58 + clamp(redDom * 1.8, 0, 0.8) + clamp((px.s - 0.14) * 1.25, 0, 0.55);
+      }
+      if (isBlueHue(px.h) && px.s >= 0.09) {
+        blueWeight +=
+          0.68 +
+          clamp(blueDom * 2.0, 0, 0.85) +
+          clamp((0.72 - px.v) * 0.9, 0, 0.35) +
+          clamp((px.s - 0.1) * 1.1, 0, 0.45);
+      }
+      if (isPurpleHue(px.h) && px.s >= 0.1) {
+        purpleWeight +=
+          0.76 +
+          clamp(purpleDom * 2.1, 0, 0.9) +
+          clamp((0.7 - px.v) * 0.95, 0, 0.4) +
+          clamp((px.s - 0.11) * 1.15, 0, 0.48);
+      }
+      if (
+        isBrownHue(px.h) &&
+        px.s >= 0.08 &&
+        px.v <= 0.78 &&
+        px.r >= px.g &&
+        px.g >= px.b * 0.82
+      ) {
+        brownWeight +=
+          0.72 +
+          clamp(warmDom * 1.5, 0, 0.58) +
+          clamp((0.76 - px.v) * 1.05, 0, 0.45);
+      }
+      if (isYellowHue(px.h) && px.s >= 0.1 && px.v >= 0.46) {
+        yellowWeight +=
+          0.7 +
+          clamp(warmDom * 1.55, 0, 0.62) +
+          clamp((px.v - 0.48) * 0.8, 0, 0.35);
+      }
+
+      if (px.h >= 250 && px.h <= 300 && px.s >= 0.16) purpleWeight += 0.16;
+      if (px.h >= 25 && px.h <= 38 && px.v < 0.68) brownWeight += 0.12;
+      if (px.h >= 48 && px.h <= 66 && px.v > 0.6) yellowWeight += 0.12;
+    }
+
+    const redRatio = redWeight / stagePixels.length;
+    const blueRatio = blueWeight / stagePixels.length;
+    const purpleRatio = purpleWeight / stagePixels.length;
+    const brownRatio = brownWeight / stagePixels.length;
+    const yellowRatio = yellowWeight / stagePixels.length;
+    const resolvedRatio = resolvedWeight / stagePixels.length;
 
     const hsvAll = rgbToHsv(avgR, avgG, avgB);
     const hsvCore = rgbToHsv(coreAvgR, coreAvgG, coreAvgB);
 
-    const redSignal = coreAvgR - (coreAvgG + coreAvgB) / 2;
-    const blueSignal = coreAvgB - (coreAvgR + coreAvgG) / 2;
-    const yellowSignal = (coreAvgR + coreAvgG) / 2 - coreAvgB;
-    const warmSignal = coreAvgR - coreAvgB;
+    const redDominance = (avgR - (avgG + avgB) / 2) / 255;
+    const blueDominance = (avgB - (avgR + avgG) / 2) / 255;
+    const purpleDominance = ((avgR + avgB) / 2 - avgG) / 255;
+    const warmDominance = ((avgR + avgG) / 2 - avgB) / 255;
 
-    const stageScores: Record<StageKey, number> = {
-      red: 0,
-      blue: 0,
-      purple: 0,
-      brown: 0,
-      yellow: 0,
-      resolved: 0,
+    const coreRedDominance = (coreAvgR - (coreAvgG + coreAvgB) / 2) / 255;
+    const coreBlueDominance = (coreAvgB - (coreAvgR + coreAvgG) / 2) / 255;
+    const corePurpleDominance = ((coreAvgR + coreAvgB) / 2 - coreAvgG) / 255;
+    const coreWarmDominance = ((coreAvgR + coreAvgG) / 2 - coreAvgB) / 255;
+
+    const stageScoresRaw: Record<StageKey, number> = {
+      red:
+        redRatio * 1.35 +
+        clamp(redDominance, 0, 0.4) * 1.15 +
+        clamp(coreRedDominance, 0, 0.4) * 0.75 +
+        clamp(hsvAll.s - 0.18, 0, 0.4) * 0.45,
+
+      blue:
+        blueRatio * 1.55 +
+        clamp(blueDominance, 0, 0.42) * 1.2 +
+        clamp(coreBlueDominance, 0, 0.42) * 0.82 +
+        clamp((roiMeanLum - coreMeanLum) / 90, 0, 0.4) * 0.42,
+
+      purple:
+        purpleRatio * 1.75 +
+        clamp(purpleDominance, 0, 0.45) * 1.25 +
+        clamp(corePurpleDominance, 0, 0.45) * 0.88 +
+        clamp((roiMeanLum - coreMeanLum) / 85, 0, 0.42) * 0.45,
+
+      brown:
+        brownRatio * 1.55 +
+        clamp(warmDominance, 0, 0.35) * 0.75 +
+        clamp(coreWarmDominance, 0, 0.35) * 0.55 +
+        clamp(0.74 - hsvAll.v, 0, 0.34) * 0.8,
+
+      yellow:
+        yellowRatio * 1.5 +
+        clamp(warmDominance, 0, 0.35) * 0.62 +
+        clamp(coreWarmDominance, 0, 0.35) * 0.42 +
+        clamp(hsvAll.v - 0.54, 0, 0.34) * 0.78,
+
+      resolved:
+        resolvedRatio * 1.85 +
+        clamp(0.2 - hsvAll.s, 0, 0.2) * 2.1 +
+        clamp(hsvAll.v - 0.64, 0, 0.26) * 1.15 +
+        clamp(0.18 - coreMeanS, 0, 0.18) * 1.3,
     };
 
-    if (hsvCore.h <= 18 || hsvCore.h >= 345) stageScores.red += 1.6;
-    if (hsvCore.h >= 18 && hsvCore.h <= 40) {
-      stageScores.red += 0.5;
-      stageScores.brown += 0.8;
-    }
-    if (hsvCore.h >= 210 && hsvCore.h <= 255) stageScores.blue += 1.7;
-    if (hsvCore.h >= 255 && hsvCore.h <= 320) stageScores.purple += 1.8;
-    if (hsvCore.h >= 20 && hsvCore.h <= 55) stageScores.yellow += 1.2;
-    if (hsvCore.h >= 18 && hsvCore.h <= 55 && coreMeanLum < 105) stageScores.brown += 1.4;
+    if (isRedHue(hsvCore.h) && hsvCore.s >= 0.16) stageScoresRaw.red += 0.16;
+    if (isBlueHue(hsvCore.h) && hsvCore.s >= 0.1) stageScoresRaw.blue += 0.22;
+    if (isPurpleHue(hsvCore.h) && hsvCore.s >= 0.12) stageScoresRaw.purple += 0.28;
+    if (isBrownHue(hsvCore.h) && hsvCore.v <= 0.72) stageScoresRaw.brown += 0.22;
+    if (isYellowHue(hsvAll.h) && hsvAll.v >= 0.56) stageScoresRaw.yellow += 0.18;
+    if (hsvAll.s < 0.13 && hsvAll.v > 0.68) stageScoresRaw.resolved += 0.34;
 
-    if (redSignal > 18) stageScores.red += 0.9;
-    if (blueSignal > 12) stageScores.blue += 1.0;
-    if (blueSignal > 8 && redSignal > 8) stageScores.purple += 1.2;
-    if (yellowSignal > 20) stageScores.yellow += 1.1;
-    if (warmSignal > 18 && coreAvgG > coreAvgB + 6) stageScores.brown += 0.8;
+    stageScoresRaw.purple += Math.min(redRatio, blueRatio) * 0.35;
+    stageScoresRaw.brown += Math.min(purpleRatio, yellowRatio) * 0.14;
 
-    if (coreMeanLum < 78) {
-      stageScores.blue += 0.4;
-      stageScores.purple += 0.7;
-      stageScores.brown += 0.4;
-    }
+    stageScoresRaw.red -=
+      purpleRatio * 0.55 + blueRatio * 0.34 + brownRatio * 0.16 + yellowRatio * 0.14;
+    stageScoresRaw.blue -= redRatio * 0.16 + yellowRatio * 0.14;
+    stageScoresRaw.purple -= yellowRatio * 0.08;
+    stageScoresRaw.brown -= redRatio * 0.22 + blueRatio * 0.13;
+    stageScoresRaw.yellow -=
+      blueRatio * 0.12 + purpleRatio * 0.12 + clamp(0.52 - hsvAll.v, 0, 0.2) * 0.8;
+    stageScoresRaw.resolved -=
+      Math.max(redRatio, blueRatio, purpleRatio, brownRatio, yellowRatio) > 0.22 ? 0.28 : 0;
 
-    if (coreMeanLum > 112) {
-      stageScores.yellow += 0.5;
-      stageScores.resolved += 0.8;
-    }
+    if (redDominance < 0.035) stageScoresRaw.red -= 0.22;
+    if (hsvAll.s < 0.16) stageScoresRaw.red -= 0.18;
 
-    if (hsvCore.s < 0.18 && coreMeanLum > 138) {
-      stageScores.resolved += 2.4;
-    }
+    const stageScoresSmoothed: Record<StageKey, number> = {
+      red: stageScoresRaw.red * 0.84 + stageScoresRaw.blue * 0.16,
+      blue:
+        stageScoresRaw.blue * 0.72 + stageScoresRaw.red * 0.12 + stageScoresRaw.purple * 0.16,
+      purple:
+        stageScoresRaw.purple * 0.68 +
+        stageScoresRaw.blue * 0.15 +
+        stageScoresRaw.brown * 0.17,
+      brown:
+        stageScoresRaw.brown * 0.72 +
+        stageScoresRaw.purple * 0.15 +
+        stageScoresRaw.yellow * 0.13,
+      yellow:
+        stageScoresRaw.yellow * 0.78 +
+        stageScoresRaw.brown * 0.14 +
+        stageScoresRaw.resolved * 0.08,
+      resolved: stageScoresRaw.resolved * 0.86 + stageScoresRaw.yellow * 0.14,
+    };
 
-    if (hsvAll.h >= 35 && hsvAll.h <= 70 && hsvAll.s > 0.18) {
-      stageScores.yellow += 0.6;
-    }
+    const stageScores: Record<StageKey, number> = {
+      red: Math.max(0.01, stageScoresSmoothed.red),
+      blue: Math.max(0.01, stageScoresSmoothed.blue),
+      purple: Math.max(0.01, stageScoresSmoothed.purple),
+      brown: Math.max(0.01, stageScoresSmoothed.brown),
+      yellow: Math.max(0.01, stageScoresSmoothed.yellow),
+      resolved: Math.max(0.01, stageScoresSmoothed.resolved),
+    };
 
-    const expectedIdx = getAgeExpectedIndex(bruiseAge);
-    if (expectedIdx !== null) {
-      if (expectedIdx <= 0.8) stageScores.red += 0.18;
-      else if (expectedIdx <= 1.8) stageScores.blue += 0.18;
-      else if (expectedIdx <= 2.8) stageScores.purple += 0.18;
-      else if (expectedIdx <= 3.8) stageScores.brown += 0.18;
-      else if (expectedIdx <= 4.8) stageScores.yellow += 0.18;
-      else stageScores.resolved += 0.18;
-    }
+    const normalizedScoreMap = softmaxStageScores(stageScores, 0.78);
+    const orderedKeys: StageKey[] = ["red", "blue", "purple", "brown", "yellow"];
 
-    const rankedStages = Object.entries(stageScores).sort((a, b) => b[1] - a[1]) as Array<
-      [StageKey, number]
-    >;
+    const stageConfidenceAll = orderedKeys.map((key) => ({
+      key,
+      label: stageDisplayLabel(key),
+      score: normalizedScoreMap[key],
+    }));
 
-    const bestStage = rankedStages[0][0];
+    const stageConfidenceTop = [...stageConfidenceAll]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
 
-    let stageKey: StageKey = bestStage;
-    let stageLabel = "Closest to Red";
+    const sortedProb = [...stageConfidenceAll].sort((a, b) => b.score - a.score);
+    const bestStage = sortedProb[0].key;
+    const bestProb = sortedProb[0]?.score ?? 0;
+    const secondProb = sortedProb[1]?.score ?? 0;
+
+    const stageKey: StageKey = bestStage;
+
     let stageSummaryLines = [
-      "This bruise pattern may reflect an earlier visible stage.",
-      "The color signal is currently interpreted closest to Red.",
-      "Red tones often appear soon after injury, although appearance can vary across skin tones and lighting.",
+      "This bruise pattern most strongly reflects a red-dominant stage.",
+      "The visible hue distribution is currently interpreted closest to Red.",
     ];
 
     if (bestStage === "blue") {
-      stageLabel = "Closest to Blue";
       stageSummaryLines = [
-        "This bruise pattern may reflect an active bruising stage.",
-        "The color signal is currently interpreted closest to Blue.",
-        "Blue tones often appear after the earliest red phase, although appearance still varies by person and lighting.",
+        "This bruise pattern most strongly reflects a blue-dominant stage.",
+        "The visible hue distribution is currently interpreted closest to Blue.",
       ];
     } else if (bestStage === "purple") {
-      stageLabel = "Closest to Purple";
       stageSummaryLines = [
-        "This bruise pattern may still reflect an active bruising stage.",
-        "The color signal is currently interpreted closest to Purple.",
-        "Purple tones often suggest a darker bruise signal remains visible, but color alone cannot determine exact timing.",
+        "This bruise pattern most strongly reflects a purple-dominant stage.",
+        "The visible hue distribution is currently interpreted closest to Purple.",
       ];
     } else if (bestStage === "brown") {
-      stageLabel = "Closest to Brown";
       stageSummaryLines = [
-        "This bruise pattern may reflect a later healing stage.",
-        "The color signal is currently interpreted closest to Brown.",
-        "Brown tones often appear as bruising continues to change over time, though the sequence is not identical for everyone.",
+        "This bruise pattern most strongly reflects a brown-dominant stage.",
+        "The visible hue distribution is currently interpreted closest to Brown.",
       ];
     } else if (bestStage === "yellow") {
-      stageLabel = "Closest to Yellow";
       stageSummaryLines = [
-        "This bruise pattern may reflect a recovery stage.",
-        "The color signal is currently interpreted closest to Yellow.",
-        "Yellow tones are often associated with later healing, although healing speed can still vary from person to person.",
+        "This bruise pattern most strongly reflects a yellow-dominant stage.",
+        "The visible hue distribution is currently interpreted closest to Yellow.",
       ];
     } else if (bestStage === "resolved") {
-      stageLabel = "Closest to Resolved";
       stageSummaryLines = [
-        "The visible bruise signal appears faint or near-resolved.",
-        "The color signal is currently interpreted closest to Resolved.",
-        "Resolved means the visible bruise color has largely faded, not that recovery timing is identical for everyone.",
+        "The visible bruise signal appears relatively faint or near-resolved.",
+        "The visible hue distribution is currently interpreted closest to Resolved.",
       ];
     }
 
@@ -851,42 +1118,47 @@ export default function Home() {
       resolved: 5,
     };
 
+    const expectedIdx = getAgeExpectedIndex(bruiseAge);
     if (expectedIdx !== null) {
       const diff = stageOrder[bestStage] - expectedIdx;
 
-      if (diff <= -1.25) {
+      if (diff <= -2) {
         stageContextLine =
-          "Compared with the reported timing, the visible bruise signal looks earlier than expected.";
-      } else if (diff >= 1.25) {
+          "Compared with the reported timing, the visible bruise signal looks clearly earlier than expected.";
+      } else if (diff < -0.9) {
         stageContextLine =
-          "Compared with the reported timing, the visible bruise signal looks later in healing than expected.";
+          "Compared with the reported timing, the visible bruise signal looks slightly earlier than expected.";
+      } else if (diff >= 2) {
+        stageContextLine =
+          "Compared with the reported timing, the visible bruise signal looks clearly later in healing than expected.";
+      } else if (diff > 0.9) {
+        stageContextLine =
+          "Compared with the reported timing, the visible bruise signal looks slightly later in healing than expected.";
       } else {
         stageContextLine =
           "Compared with the reported timing, the current color stage looks broadly in range.";
       }
     }
 
-    let consistencyTitle = "Selections stayed consistent across passes";
     let consistencyMeaningLines = [
       "This reflects how similar your bruise boundary selections were across repeated passes.",
       "Higher consistency usually means the bruise boundary was easier to identify.",
     ];
 
     if (consistencyLabel === "Moderate") {
-      consistencyTitle = "Selections changed slightly across passes";
       consistencyMeaningLines = [
         "This reflects how similar your bruise boundary selections were across repeated passes.",
         "A moderate result suggests the bruise boundary was visible, but not perfectly defined.",
       ];
     } else if (consistencyLabel === "Low") {
-      consistencyTitle = "Selections changed noticeably across passes";
       consistencyMeaningLines = [
         "This reflects how similar your bruise boundary selections were across repeated passes.",
         "A low result usually means the bruise boundary was harder to define consistently.",
       ];
     }
 
-    const darknessScore = clamp(Math.round(((148 - coreMeanLum) / 88) * 100), 0, 100);
+    const darknessScore = clamp((150 - coreMeanLum) / 90, 0, 1);
+    const intensityScore = darknessScore;
 
     let intensityLabel: IntensityLabel = "Mild";
     let intensityLines = [
@@ -894,19 +1166,19 @@ export default function Home() {
       "The overall intensity is interpreted as Mild.",
     ];
 
-    if (darknessScore >= 78) {
+    if (darknessScore >= 0.78) {
       intensityLabel = "Very Strong";
       intensityLines = [
         "The bruise core appears very dark compared with surrounding skin.",
         "The overall intensity is interpreted as Very Strong.",
       ];
-    } else if (darknessScore >= 58) {
+    } else if (darknessScore >= 0.58) {
       intensityLabel = "Strong";
       intensityLines = [
         "The bruise core appears noticeably dark compared with surrounding skin.",
         "The overall intensity is interpreted as Strong.",
       ];
-    } else if (darknessScore >= 38) {
+    } else if (darknessScore >= 0.38) {
       intensityLabel = "Moderate";
       intensityLines = [
         "The bruise core appears moderately darker than surrounding skin.",
@@ -915,32 +1187,24 @@ export default function Home() {
     }
 
     const stageOrderIndex = stageOrder[bestStage];
-    const nextStageIndex = clamp(stageOrderIndex + 1, 0, 5);
-
-    const bestScore = rankedStages[0][1];
-    const secondScore = rankedStages[1][1];
-
-    let withinStage = 0.5;
-    if (nextStageIndex !== stageOrderIndex) {
-      const gap = Math.max(0.001, bestScore - secondScore);
-      withinStage = clamp(0.32 + (1 / (1 + gap)) * 0.45, 0.32, 0.78);
-    } else {
-      withinStage = 0.85;
-    }
-
+    const confidenceGap = clamp(bestProb - secondProb, 0, 1);
+    const withinStage = clamp(0.48 + confidenceGap * 0.34, 0.44, 0.88);
     const stageProgressPercent = clamp(((stageOrderIndex + withinStage) / 6) * 100, 6, 100);
 
     setResult({
       stageKey,
-      stageLabel,
+      stageLabel: stageDisplayLabel(stageKey),
       stageSummaryLines,
       stageContextLine,
       stageProgressPercent,
+      stageConfidenceAll,
+      stageConfidenceTop,
       consistencyLabel,
-      consistencyTitle,
       consistencyMeaningLines,
+      consistencyScore: clamp(consistencyValue, 0, 1),
       intensityLabel,
       intensityLines,
+      intensityScore,
       consensusPixels,
       refinedCount: availableRefined,
       avgR,
@@ -952,7 +1216,7 @@ export default function Home() {
     });
 
     setAnalysisText(
-      "Consensus analysis complete. The final interpretation used the refined overlap region rather than a single brushed boundary."
+      "Consensus analysis complete. The final interpretation used weighted bruise-like hue signals within the refined overlap region."
     );
 
     hardResetOverlay();
@@ -996,9 +1260,7 @@ export default function Home() {
       hardResetOverlay();
       redrawOverlay();
 
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
     tempImg.onerror = () => {
@@ -1007,17 +1269,6 @@ export default function Home() {
     };
 
     tempImg.src = newUrl;
-  }
-
-  function stageIndex(key: StageKey) {
-    return {
-      red: 0,
-      blue: 1,
-      purple: 2,
-      brown: 3,
-      yellow: 4,
-      resolved: 5,
-    }[key];
   }
 
   function intensityIndex(label: IntensityLabel) {
@@ -1040,7 +1291,9 @@ export default function Home() {
   const displayed = getDisplayedSize(zoom);
   const bruiseActive = toolMode === "bruise";
   const eraseActive = toolMode === "erase";
+  const savedAny = savedSelections.some(Boolean);
   const canAnalyze = image && refinedSelections.some(Boolean);
+  const analyzeEnabledVisual = image && savedAny;
 
   const showBrushCursor =
     image && hoverPoint && (toolMode === "bruise" || toolMode === "erase");
@@ -1051,7 +1304,16 @@ export default function Home() {
     [savedSelections]
   );
 
-  const activeStageIndex = result ? stageIndex(result.stageKey) : -1;
+  const healingStage = result ? getHealingStageUI(result.stageKey) : null;
+
+  const summaryBars =
+    result?.stageConfidenceAll ?? [
+      { key: "red" as StageKey, label: "Red", score: 0 },
+      { key: "blue" as StageKey, label: "Blue", score: 0 },
+      { key: "purple" as StageKey, label: "Purple", score: 0 },
+      { key: "brown" as StageKey, label: "Brown", score: 0 },
+      { key: "yellow" as StageKey, label: "Yellow", score: 0 },
+    ];
 
   return (
     <>
@@ -1060,7 +1322,7 @@ export default function Home() {
         body {
           margin: 0;
           padding: 0;
-          background: #f4f7fc;
+          background: #ffffff;
         }
 
         * {
@@ -1071,188 +1333,294 @@ export default function Home() {
           -webkit-appearance: none;
           appearance: none;
           width: 100%;
-          height: 8px;
+          height: 4px;
           border-radius: 999px;
-          background: #d9e1ee;
+          background: #a7a7a7;
           outline: none;
         }
 
         input[type="range"]::-webkit-slider-thumb {
           -webkit-appearance: none;
           appearance: none;
-          width: 22px;
-          height: 22px;
+          width: 13px;
+          height: 13px;
           border-radius: 50%;
-          background: #5b6f8f;
-          border: 3px solid #f4f7fc;
-          box-shadow: 0 2px 8px rgba(35, 53, 85, 0.18);
+          background: #ffffff;
+          border: 1.5px solid #8d8d8d;
           cursor: pointer;
         }
 
         input[type="range"]::-moz-range-thumb {
-          width: 22px;
-          height: 22px;
+          width: 13px;
+          height: 13px;
           border-radius: 50%;
-          background: #5b6f8f;
-          border: 3px solid #f4f7fc;
-          box-shadow: 0 2px 8px rgba(35, 53, 85, 0.18);
+          background: #ffffff;
+          border: 1.5px solid #8d8d8d;
           cursor: pointer;
         }
 
-        .ui-btn,
-        .pass-action-btn,
-        .analysis-pill {
+        .page-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 26px;
+          align-items: start;
+        }
+
+        .card {
+          background: #ffffff;
+          border: 1.6px solid #bebebe;
+          border-radius: 4px;
+          box-shadow: none;
+        }
+
+        .age-btn,
+        .tool-btn,
+        .choice-pill,
+        .stage-pill,
+        .save-btn,
+        .analyze-btn {
           transition:
             background 0.18s ease,
             color 0.18s ease,
             border-color 0.18s ease,
             box-shadow 0.18s ease,
-            opacity 0.18s ease,
             transform 0.18s ease,
-            filter 0.18s ease;
+            opacity 0.18s ease;
         }
 
-        .ui-btn:hover,
-        .pass-action-btn:hover,
-        .analysis-pill:hover {
-          opacity: 0.98;
+        .age-btn:hover,
+        .tool-btn:hover,
+        .choice-pill:hover,
+        .save-btn:hover,
+        .stage-pill:hover,
+        .analyze-btn:hover:not(:disabled) {
           transform: translateY(-1px);
         }
 
-        .ui-btn.soft-blue-hover:hover {
-          background: rgba(47, 98, 255, 0.08) !important;
-          color: #2f62ff !important;
-          border-color: #2f62ff !important;
+        .age-btn:hover,
+        .tool-btn:hover {
           box-shadow:
-            0 0 0 3px rgba(47, 98, 255, 0.14),
-            0 0 0 7px rgba(47, 98, 255, 0.08),
-            0 6px 14px rgba(47, 98, 255, 0.08) !important;
+            0 0 0 3px rgba(66, 112, 255, 0.12),
+            0 0 0 8px rgba(66, 112, 255, 0.05);
         }
 
-        .ui-btn.soft-blue-hover.is-active:hover {
-          background: #2f62ff !important;
-          color: #ffffff !important;
-          border-color: #2f62ff !important;
+        .tool-btn.is-active:hover {
           box-shadow:
-            0 0 0 3px rgba(47, 98, 255, 0.14),
-            0 0 0 7px rgba(47, 98, 255, 0.08),
-            0 6px 14px rgba(47, 98, 255, 0.08) !important;
+            0 0 0 4px rgba(66, 112, 255, 0.16),
+            0 0 0 10px rgba(66, 112, 255, 0.07);
         }
 
-        .ui-btn.analyze-hover:hover:not(:disabled) {
-          background: #ef0800 !important;
-          color: #ffffff !important;
-          border-color: #ef0800 !important;
+        .analyze-btn.is-enabled:hover {
           box-shadow:
-            0 0 0 3px rgba(239, 8, 0, 0.12),
-            0 0 0 7px rgba(239, 8, 0, 0.06),
-            0 8px 18px rgba(239, 8, 0, 0.14) !important;
+            0 0 0 4px rgba(255, 73, 21, 0.14),
+            0 0 0 10px rgba(255, 73, 21, 0.07);
         }
 
-        .pass-action-btn:hover,
-        .analysis-pill:hover {
-          box-shadow:
-            0 0 0 2px rgba(47, 98, 255, 0.12),
-            0 4px 10px rgba(47, 98, 255, 0.06);
-        }
-
-        .ui-btn:focus,
-        .ui-btn:focus-visible,
-        .pass-action-btn:focus,
-        .pass-action-btn:focus-visible,
-        .analysis-pill:focus,
-        .analysis-pill:focus-visible,
         button:focus,
         button:focus-visible {
           outline: none !important;
         }
 
-        .ui-btn:disabled:hover,
-        .pass-action-btn:disabled:hover,
-        .analysis-pill:disabled:hover {
-          opacity: 1;
-          transform: none;
-          box-shadow: none;
+        @media (max-width: 1280px) {
+          .page-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 860px) {
+          .age-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          .tool-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          .photo-pass-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .stage-pills-grid {
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+          }
+
+          .confidence-row {
+            grid-template-columns: 46px 1fr 88px !important;
+          }
+
+          .intensity-grid,
+          .consistency-grid {
+            gap: 10px !important;
+          }
+
+          .top-header-grid {
+            grid-template-columns: 1fr !important;
+            row-gap: 6px;
+            height: auto !important;
+            padding-top: 10px !important;
+            padding-bottom: 10px !important;
+          }
+
+          .top-header-left,
+          .top-header-center,
+          .top-header-right {
+            justify-self: start !important;
+          }
         }
       `}</style>
 
-      <main
-        style={{
-          padding: 22,
-          fontFamily:
-            'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
-          maxWidth: 1540,
-          margin: "0 auto",
-          color: "#253858",
-        }}
-      >
-        <div
+      <>
+        <header
           style={{
-            display: "grid",
-            gridTemplateColumns: "1.42fr 1fr",
-            gap: 28,
-            alignItems: "start",
+            background: "#ffffff",
+            borderBottom: "1px solid #e5e5e5",
           }}
         >
-          <section>
+          <div
+            className="top-header-grid"
+            style={{
+              maxWidth: 1640,
+              margin: "0 auto",
+              padding: "0 18px",
+              height: 58,
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              alignItems: "center",
+              columnGap: 26,
+            }}
+          >
             <div
+              className="top-header-left"
               style={{
                 display: "flex",
                 alignItems: "baseline",
-                gap: 18,
-                marginBottom: 16,
+                gap: 8,
+                justifySelf: "start",
+                minWidth: 0,
               }}
             >
-              <h1
+              <div
                 style={{
-                  margin: 0,
-                  fontSize: 54,
+                  fontSize: 28,
+                  fontWeight: 700,
+                  color: "#1c1c1c",
                   lineHeight: 1,
-                  fontWeight: 800,
-                  letterSpacing: -1.6,
-                  color: "#22365a",
+                  whiteSpace: "nowrap",
                 }}
               >
                 BruiseTrace
-              </h1>
-              <span
+              </div>
+              <div
                 style={{
-                  color: "#2f7cff",
-                  fontSize: 24,
+                  fontSize: 14,
                   fontWeight: 500,
-                  lineHeight: 1.1,
+                  color: "#2da1ff",
+                  lineHeight: 1.2,
+                  whiteSpace: "nowrap",
                 }}
               >
                 Inclusive skin signal measurement system
-              </span>
+              </div>
             </div>
 
-            <div style={{ display: "grid", gap: 18 }}>
+            <div
+              className="top-header-center"
+              style={{
+                justifySelf: "start",
+                fontSize: 28,
+                fontWeight: 700,
+                color: "#1c1c1c",
+                lineHeight: 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Analysis
+            </div>
+
+            <div
+              className="top-header-right"
+              style={{
+                justifySelf: "end",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                color: "#1c1c1c",
+                whiteSpace: "nowrap",
+              }}
+            >
               <div
                 style={{
-                  background: "#ffffff",
-                  border: "1px solid #d7e0ed",
-                  borderRadius: 18,
-                  padding: "24px 26px",
-                  boxShadow: "0 2px 10px rgba(28,49,86,0.06)",
+                  fontSize: 14,
+                  fontWeight: 500,
+                  lineHeight: 1,
+                }}
+              >
+                Io Kim
+              </div>
+
+              <div
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: "50%",
+                  background: "#eadcfa",
+                  border: "1.4px solid #ceb8ef",
+                  position: "relative",
+                  flexShrink: 0,
                 }}
               >
                 <div
                   style={{
-                    fontSize: 19,
-                    fontWeight: 850,
-                    color: "#233555",
-                    marginBottom: 8,
+                    position: "absolute",
+                    left: "50%",
+                    top: "40%",
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: "#8869c9",
+                    transform: "translate(-50%, -50%)",
                   }}
-                >
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    bottom: 2,
+                    width: 12,
+                    height: 6,
+                    borderRadius: "8px 8px 0 0",
+                    background: "#8869c9",
+                    transform: "translateX(-50%)",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main
+          style={{
+            padding: 22,
+            fontFamily:
+              'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+            maxWidth: 1640,
+            margin: "0 auto",
+            color: "#1c1c1c",
+          }}
+        >
+          <div className="page-grid">
+            {/* LEFT COLUMN */}
+            <section style={{ display: "grid", gap: 26 }}>
+              <div className="card" style={{ padding: "16px 30px" }}>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>
                   Estimated bruise age
                 </div>
                 <div
                   style={{
                     fontSize: 15,
                     fontWeight: 700,
-                    color: "#4a5e82",
-                    marginBottom: 8,
+                    color: "#595959",
+                    marginBottom: 4,
                   }}
                 >
                   When did the bruise likely begin?
@@ -1260,18 +1628,19 @@ export default function Home() {
                 <div
                   style={{
                     fontSize: 14,
-                    color: "#6a82a8",
-                    marginBottom: 20,
+                    color: "#777777",
+                    marginBottom: 18,
                   }}
                 >
                   Helps interpret bruise color stages.
                 </div>
 
                 <div
+                  className="age-grid"
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(4, 1fr)",
-                    gap: 12,
+                    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                    gap: 10,
                   }}
                 >
                   {AGE_OPTIONS.map((item) => {
@@ -1279,17 +1648,24 @@ export default function Home() {
                     return (
                       <button
                         key={item.key}
-                        className={`ui-btn soft-blue-hover ${active ? "is-active" : ""}`}
+                        className="age-btn"
                         onClick={() => setBruiseAge(item.key)}
                         style={{
-                          height: 60,
-                          borderRadius: 12,
-                          background: active ? "#2f62ff" : "#ffffff",
-                          color: active ? "#ffffff" : "#4a5e82",
-                          border: active ? "2px solid #2f62ff" : "1.5px solid #bfd0e6",
-                          fontWeight: 800,
-                          fontSize: 16,
+                          width: "100%",
+                          minHeight: 38,
+                          padding: "8px 8px",
+                          borderRadius: 14,
+                          border: `2px solid ${active ? "#3563f0" : "#6f93ff"}`,
+                          background: active ? "#3563f0" : "#ffffff",
+                          color: active ? "#ffffff" : "#244f9e",
+                          fontWeight: 700,
+                          fontSize: 13,
                           cursor: "pointer",
+                          lineHeight: 1.1,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          textAlign: "center",
                         }}
                       >
                         {item.label}
@@ -1299,74 +1675,51 @@ export default function Home() {
                 </div>
               </div>
 
-              <div
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #d7e0ed",
-                  borderRadius: 18,
-                  padding: "24px 26px",
-                  boxShadow: "0 2px 10px rgba(28,49,86,0.06)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 19,
-                    fontWeight: 850,
-                    color: "#233555",
-                    marginBottom: 8,
-                  }}
-                >
+              <div className="card" style={{ padding: "16px 30px" }}>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>
                   Guided selection flow
                 </div>
                 <div
                   style={{
-                    fontSize: 15,
-                    color: "#4a5e82",
-                    lineHeight: 1.5,
-                    marginBottom: 2,
+                    fontSize: 14,
+                    color: "#6d6d6d",
+                    lineHeight: 1.45,
+                    marginBottom: 16,
                   }}
                 >
                   To reduce boundary-selection error, make up to 3 guided selections:
-                </div>
-                <div
-                  style={{
-                    fontSize: 15,
-                    color: "#4a5e82",
-                    lineHeight: 1.5,
-                    marginBottom: 22,
-                  }}
-                >
-                  <strong>Tight, Balanced</strong>, and <strong>Broad</strong>.
+                  <br />
+                  <strong style={{ color: "#383838" }}>Tight, Balanced, and Broad.</strong>
                 </div>
 
                 <div
+                  className="tool-grid"
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(4, 1fr)",
-                    gap: 14,
+                    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                    gap: 10,
                     alignItems: "start",
                   }}
                 >
                   <div>
                     <button
-                      className="ui-btn soft-blue-hover is-active"
+                      className="tool-btn is-active"
                       onClick={() => fileInputRef.current?.click()}
                       style={{
                         width: "100%",
-                        height: 60,
-                        borderRadius: 14,
-                        background: "#2f62ff",
+                        height: 38,
+                        borderRadius: 16,
+                        border: "2px solid #3563f0",
+                        background: "#3563f0",
                         color: "#ffffff",
-                        border: "2px solid #2f62ff",
-                        boxShadow: "0 2px 10px rgba(47,98,255,0.16)",
-                        fontWeight: 800,
-                        fontSize: 16,
+                        fontWeight: 700,
+                        fontSize: 13,
                         cursor: "pointer",
                       }}
                     >
                       Upload Photo
                     </button>
-                    <div style={{ marginTop: 16, padding: "0 10px" }}>
+                    <div style={{ marginTop: 8, padding: "0 14px" }}>
                       <input
                         type="range"
                         min="1"
@@ -1386,26 +1739,23 @@ export default function Home() {
 
                   <div>
                     <button
-                      className={`ui-btn soft-blue-hover ${bruiseActive ? "is-active" : ""}`}
+                      className={`tool-btn ${bruiseActive ? "is-active" : ""}`}
                       onClick={() => setToolMode((prev) => (prev === "bruise" ? null : "bruise"))}
                       style={{
                         width: "100%",
-                        height: 60,
-                        borderRadius: 14,
-                        background: bruiseActive ? "#2f62ff" : "#ffffff",
-                        color: bruiseActive ? "#ffffff" : "#2f62ff",
-                        border: "2px solid #2f62ff",
-                        boxShadow: bruiseActive
-                          ? "0 2px 10px rgba(47,98,255,0.16)"
-                          : "none",
-                        fontWeight: 800,
-                        fontSize: 16,
+                        height: 38,
+                        borderRadius: 16,
+                        border: "2px solid #6f93ff",
+                        background: bruiseActive ? "#3563f0" : "#ffffff",
+                        color: bruiseActive ? "#ffffff" : "#3563f0",
+                        fontWeight: 700,
+                        fontSize: 13,
                         cursor: "pointer",
                       }}
                     >
                       Bruise Brush
                     </button>
-                    <div style={{ marginTop: 16, padding: "0 10px" }}>
+                    <div style={{ marginTop: 8, padding: "0 14px" }}>
                       <input
                         type="range"
                         min={BRUISE_BRUSH_MIN}
@@ -1414,31 +1764,30 @@ export default function Home() {
                         value={bruiseBrushSize}
                         onChange={(e) => setBruiseBrushSize(Number(e.target.value))}
                         disabled={!bruiseActive}
-                        style={{ opacity: bruiseActive ? 1 : 0.35 }}
+                        style={{ opacity: bruiseActive ? 1 : 0.45 }}
                       />
                     </div>
                   </div>
 
                   <div>
                     <button
-                      className={`ui-btn soft-blue-hover ${eraseActive ? "is-active" : ""}`}
+                      className={`tool-btn ${eraseActive ? "is-active" : ""}`}
                       onClick={() => setToolMode((prev) => (prev === "erase" ? null : "erase"))}
                       style={{
                         width: "100%",
-                        height: 60,
-                        borderRadius: 14,
-                        background: eraseActive ? "#2f62ff" : "#ffffff",
-                        color: eraseActive ? "#ffffff" : "#2f62ff",
-                        border: "2px solid #2f62ff",
-                        boxShadow: eraseActive ? "0 2px 10px rgba(47,98,255,0.16)" : "none",
-                        fontWeight: 800,
-                        fontSize: 16,
+                        height: 38,
+                        borderRadius: 16,
+                        border: "2px solid #6f93ff",
+                        background: eraseActive ? "#3563f0" : "#ffffff",
+                        color: eraseActive ? "#ffffff" : "#3563f0",
+                        fontWeight: 700,
+                        fontSize: 13,
                         cursor: "pointer",
                       }}
                     >
                       Erase
                     </button>
-                    <div style={{ marginTop: 16, padding: "0 10px" }}>
+                    <div style={{ marginTop: 8, padding: "0 14px" }}>
                       <input
                         type="range"
                         min={ERASE_BRUSH_MIN}
@@ -1447,28 +1796,25 @@ export default function Home() {
                         value={eraseBrushSize}
                         onChange={(e) => setEraseBrushSize(Number(e.target.value))}
                         disabled={!eraseActive}
-                        style={{ opacity: eraseActive ? 1 : 0.35 }}
+                        style={{ opacity: eraseActive ? 1 : 0.45 }}
                       />
                     </div>
                   </div>
 
                   <div>
                     <button
-                      className="ui-btn analyze-hover"
+                      className={`analyze-btn ${analyzeEnabledVisual ? "is-enabled" : ""}`}
                       onClick={analyzeConsensus}
                       disabled={!canAnalyze}
                       style={{
                         width: "100%",
-                        height: 78,
+                        height: 38,
                         borderRadius: 16,
-                        background: canAnalyze ? "#ef0800" : "#ffffff",
-                        color: canAnalyze ? "#ffffff" : "#ef0800",
-                        border: "2px solid #ef0800",
-                        boxShadow: canAnalyze
-                          ? "0 3px 14px rgba(239,8,0,0.18)"
-                          : "0 0 0 1px rgba(239,8,0,0.02)",
-                        fontWeight: 850,
-                        fontSize: 18,
+                        border: "2.2px solid #ff4b1f",
+                        background: analyzeEnabledVisual ? "#ff4b1f" : "#ffffff",
+                        color: analyzeEnabledVisual ? "#ffffff" : "#e23721",
+                        fontWeight: 700,
+                        fontSize: 13,
                         cursor: canAnalyze ? "pointer" : "default",
                       }}
                     >
@@ -1491,10 +1837,11 @@ export default function Home() {
               </div>
 
               <div
+                className="photo-pass-grid"
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 246px",
-                  gap: 18,
+                  gridTemplateColumns: "1.78fr 1fr",
+                  gap: 16,
                   alignItems: "start",
                 }}
               >
@@ -1502,13 +1849,12 @@ export default function Home() {
                   style={{
                     width: "100%",
                     aspectRatio: "1 / 1",
-                    border: "1px solid #c8d5e6",
-                    borderRadius: 8,
-                    overflow: "hidden",
+                    background: "#d3d3d3",
+                    border: "1.6px solid #bdbdbd",
+                    borderRadius: 4,
                     position: "relative",
-                    background: "#dfe6f1",
+                    overflow: "hidden",
                     userSelect: "none",
-                    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.4)",
                     cursor: toolMode === null ? (draggingImage ? "grabbing" : "grab") : "default",
                   }}
                   onMouseDown={(e) => {
@@ -1610,7 +1956,7 @@ export default function Home() {
                               border:
                                 toolMode === "bruise"
                                   ? "2px solid #59ff6a"
-                                  : "2px solid #475569",
+                                  : "2px solid #4f4f4f",
                               background:
                                 toolMode === "bruise"
                                   ? "rgba(89,255,106,0.08)"
@@ -1619,6 +1965,29 @@ export default function Home() {
                             }}
                           />
                         )}
+
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: 14,
+                          left: "50%",
+                          transform: "translateX(-50%)",
+                          background: "rgba(69, 47, 28, 0.72)",
+                          color: "#ffffff",
+                          padding: "8px 14px",
+                          borderRadius: 12,
+                          fontSize: 12,
+                          whiteSpace: "nowrap",
+                          pointerEvents: "none",
+                        }}
+                      >
+                        Pass {currentPass + 1} · {PASS_LABELS[currentPass]} ·{" "}
+                        {toolMode === null
+                          ? "Pan Image"
+                          : toolMode === "bruise"
+                          ? "Bruise Brush"
+                          : "Erase"}
+                      </div>
                     </>
                   ) : (
                     <div
@@ -1628,36 +1997,11 @@ export default function Home() {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        color: "#425777",
-                        fontSize: 28,
-                        fontWeight: 500,
+                        fontSize: 24,
+                        color: "#2f2f2f",
                       }}
                     >
                       Photo
-                    </div>
-                  )}
-
-                  {image && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        bottom: 16,
-                        left: "50%",
-                        transform: "translateX(-50%)",
-                        background: "rgba(56,42,34,0.72)",
-                        color: "#ffffff",
-                        padding: "8px 14px",
-                        borderRadius: 10,
-                        fontSize: 12,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Pass {currentPass + 1} · {PASS_LABELS[currentPass]} ·{" "}
-                      {toolMode === null
-                        ? "Pan Image"
-                        : toolMode === "bruise"
-                        ? "Bruise Brush"
-                        : "Erase"}
                     </div>
                   )}
                 </div>
@@ -1675,101 +2019,73 @@ export default function Home() {
                           setResult(null);
                           if (savedSelections[idx]) loadMaskToCanvas(savedSelections[idx]);
                           else clearMask();
-                          setAnalysisText(
-                            `Pass ${idx + 1} (${label}) selected. Brush, erase, or reuse the previous pass if needed.`
-                          );
                         }}
                         style={{
-                          background: isSaved ? "#eefbf2" : isCurrent ? "#eef4ff" : "#ffffff",
+                          background: isSaved ? "#e7f3e7" : "#ffffff",
                           border: isSaved
-                            ? "1.5px solid #cfe7d4"
+                            ? "1.6px solid #b8d6ba"
                             : isCurrent
-                            ? "2px solid #2f62ff"
-                            : "1px solid #d9e2ef",
-                          borderRadius: 14,
-                          padding: 18,
-                          minHeight: 142,
-                          boxShadow: "0 2px 10px rgba(28,49,86,0.05)",
+                            ? "2px solid #3563f0"
+                            : "1.6px solid #bebebe",
+                          borderRadius: 4,
+                          padding: "12px 14px",
+                          minHeight: 94,
                           cursor: "pointer",
-                          display: "flex",
-                          flexDirection: "column",
-                          justifyContent: "space-between",
                         }}
                       >
-                        <div>
-                          <div
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "baseline",
+                            marginBottom: 10,
+                          }}
+                        >
+                          <div style={{ fontSize: 18, fontWeight: 800 }}>Pass {idx + 1}</div>
+                          <div style={{ fontSize: 14, color: "#727272", fontWeight: 500 }}>
+                            {label}
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: 11, color: "#8a8a8a", marginBottom: 10 }}>
+                          {isSaved ? `Pass ${idx + 1}: ${savedCounts[idx]} px` : "Not saved"}
+                        </div>
+
+                        {idx > 0 && (
+                          <label
+                            onClick={(e) => e.stopPropagation()}
                             style={{
                               display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "baseline",
-                              marginBottom: 12,
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontWeight: 900,
-                                fontSize: 18,
-                                color: "#233555",
-                              }}
-                            >
-                              Pass {idx + 1}
-                            </div>
-                            <div
-                              style={{
-                                fontWeight: 500,
-                                fontSize: 14,
-                                color: "#6b7d99",
-                              }}
-                            >
-                              {label}
-                            </div>
-                          </div>
-
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "#90a0bb",
+                              alignItems: "center",
+                              gap: 6,
+                              fontSize: 11,
+                              color: "#757575",
                               marginBottom: 10,
                             }}
                           >
-                            {isSaved ? `Pass ${idx + 1}: ${savedCounts[idx]} px` : "Not saved"}
-                          </div>
-
-                          {idx > 0 && (
-                            <label
-                              onClick={(e) => e.stopPropagation()}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 8,
-                                fontSize: 12,
-                                color: "#6b7d99",
+                            <input
+                              type="checkbox"
+                              checked={sameAsPrevious[idx]}
+                              onChange={(e) => {
+                                const next = [...sameAsPrevious] as [boolean, boolean, boolean];
+                                next[idx] = e.target.checked;
+                                setSameAsPrevious(next);
+                                if (currentPass !== idx) setCurrentPass(idx as PassIndex);
+                                if (e.target.checked) {
+                                  const prev = savedSelections[idx - 1];
+                                  if (prev) loadMaskToCanvas(prev);
+                                } else {
+                                  clearMask();
+                                }
                               }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={sameAsPrevious[idx]}
-                                onChange={(e) => {
-                                  const next = [...sameAsPrevious] as [boolean, boolean, boolean];
-                                  next[idx] = e.target.checked;
-                                  setSameAsPrevious(next);
-                                  if (currentPass !== idx) setCurrentPass(idx as PassIndex);
-                                  if (e.target.checked) {
-                                    const prev = savedSelections[idx - 1];
-                                    if (prev) loadMaskToCanvas(prev);
-                                  } else {
-                                    clearMask();
-                                  }
-                                }}
-                              />
-                              Same as previous
-                            </label>
-                          )}
-                        </div>
+                            />
+                            Same as previous
+                          </label>
+                        )}
 
                         <div style={{ display: "flex", justifyContent: "flex-end" }}>
                           <button
-                            className="pass-action-btn"
+                            className="save-btn"
                             onClick={(e) => {
                               e.stopPropagation();
                               if (!image) return;
@@ -1785,14 +2101,14 @@ export default function Home() {
                               else savePass(idx as PassIndex);
                             }}
                             style={{
-                              height: 40,
-                              minWidth: 90,
-                              borderRadius: 8,
-                              border: "1px solid #bfd0e6",
-                              background: isSaved ? "#eef2f7" : "#2f62ff",
-                              color: isSaved ? "#435879" : "#ffffff",
+                              minWidth: 74,
+                              height: 34,
+                              borderRadius: 14,
+                              border: "2px solid #3563f0",
+                              background: "#3563f0",
+                              color: "#ffffff",
                               fontWeight: 700,
-                              fontSize: 14,
+                              fontSize: 12,
                               cursor: "pointer",
                             }}
                           >
@@ -1806,13 +2122,11 @@ export default function Home() {
               </div>
 
               <div
+                className="card"
                 style={{
-                  background: "#f8fbff",
-                  border: "1px solid #d9e2ef",
-                  borderRadius: 14,
-                  padding: "24px 26px",
-                  opacity: 0.62,
-                  boxShadow: "0 2px 10px rgba(28,49,86,0.04)",
+                  minHeight: 150,
+                  padding: "18px 30px",
+                  opacity: 0.58,
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "end",
@@ -1822,15 +2136,15 @@ export default function Home() {
                 <div>
                   <div
                     style={{
-                      fontSize: 18,
+                      fontSize: 17,
                       fontWeight: 800,
-                      color: "#7486a6",
-                      marginBottom: 14,
+                      color: "#8b8b8b",
+                      marginBottom: 12,
                     }}
                   >
                     Recovery tracking (coming soon)
                   </div>
-                  <div style={{ color: "#7e8faa", fontSize: 14, lineHeight: 1.55 }}>
+                  <div style={{ color: "#8c8c8c", fontSize: 14, lineHeight: 1.45 }}>
                     Suggested re-check timing: compare another photo
                     <br />
                     after 24 hours to observe a clearer recovery trend.
@@ -1839,286 +2153,504 @@ export default function Home() {
 
                 <button
                   disabled
-                  className="ui-btn"
                   style={{
-                    height: 50,
-                    minWidth: 102,
+                    minWidth: 60,
+                    height: 30,
                     borderRadius: 10,
-                    border: "1.5px solid #9db7ff",
+                    border: "2px solid #bcbcbc",
                     background: "#ffffff",
-                    color: "#5a87ff",
+                    color: "#9b9b9b",
                     fontWeight: 700,
-                    fontSize: 14,
+                    fontSize: 12,
                   }}
                 >
                   Start
                 </button>
               </div>
-            </div>
 
-            <canvas
-              ref={roiCanvasRef}
-              width={FRAME_SIZE}
-              height={FRAME_SIZE}
-              style={{ display: "none" }}
-            />
-          </section>
+              <canvas
+                ref={roiCanvasRef}
+                width={FRAME_SIZE}
+                height={FRAME_SIZE}
+                style={{ display: "none" }}
+              />
+            </section>
 
-          <aside>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "start",
-                marginBottom: 16,
-              }}
-            >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 54,
-                  lineHeight: 1,
-                  fontWeight: 800,
-                  letterSpacing: -1.6,
-                  color: "#22365a",
-                }}
-              >
-                Analysis
-              </h2>
-
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  background: "#ffffff",
-                  border: "1px solid #d9e2ef",
-                  borderRadius: 999,
-                  padding: "8px 14px",
-                  boxShadow: "0 2px 10px rgba(28,49,86,0.06)",
-                }}
-              >
-                <div style={{ textAlign: "right", lineHeight: 1.15 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#2a3e61" }}>sulma</div>
-                  <div style={{ fontSize: 12, color: "#8ca0bf" }}>guest</div>
-                </div>
-                <div
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: "50%",
-                    border: "1px solid #d9e2ef",
-                    background: "#f7f9fd",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 18,
-                    color: "#6d7fa0",
-                  }}
-                >
-                  ◔
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gap: 18 }}>
-              <div
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #d9e2ef",
-                  borderRadius: 18,
-                  padding: 28,
-                  boxShadow: "0 2px 10px rgba(28,49,86,0.06)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 19,
-                    fontWeight: 850,
-                    color: "#233555",
-                    marginBottom: 18,
-                  }}
-                >
-                  Color stages of a Bruise
+            {/* CENTER COLUMN */}
+            <section style={{ display: "grid", gap: 26 }}>
+              <div className="card" style={{ minHeight: 344, padding: "16px 28px 18px 28px" }}>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>
+                  Bruise healing stage
                 </div>
 
-                {!result ? (
-                  <div style={{ color: "#546884", fontSize: 14, lineHeight: 1.75 }}>
-                    This card places the current bruise appearance within a commonly described
-                    color-change pattern.
-                  </div>
-                ) : (
-                  <>
-                    <div
-                      style={{
-                        color: "#546884",
-                        fontSize: 14,
-                        lineHeight: 1.75,
-                        marginBottom: 18,
-                      }}
-                    >
-                      {result.stageSummaryLines.map((line) => (
-                        <div key={line} style={{ marginBottom: 4 }}>
-                          {line}
-                        </div>
-                      ))}
-                      {result.stageContextLine && (
+                <div style={{ marginBottom: 18 }}>
+                  <div
+                    className="stage-pills-grid"
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                      gap: 8,
+                      alignItems: "start",
+                      marginBottom: 8,
+                    }}
+                  >
+                    {(["S1", "S2", "S3", "S4", "S5"] as const).map((slotLabel, index) => {
+                      const slot = (index + 1) as 1 | 2 | 3 | 4 | 5;
+                      const active = healingStage ? healingStage.slot === slot : false;
+
+                      return (
                         <div
+                          key={slotLabel}
                           style={{
-                            marginTop: 8,
-                            fontWeight: 700,
-                            color: "#425777",
+                            display: "flex",
+                            justifyContent: "center",
+                            position: "relative",
+                            paddingBottom: active ? 12 : 0,
                           }}
                         >
-                          {result.stageContextLine}
-                        </div>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(6, 1fr)",
-                        gap: 10,
-                        marginBottom: 14,
-                      }}
-                    >
-                      {STAGE_FLOW.map((label, idx) => {
-                        const active = idx === activeStageIndex;
-                        return (
-                          <div key={label} style={{ display: "flex", justifyContent: "center" }}>
-                            <div
-                              className="analysis-pill"
-                              style={{
-                                minWidth: 74,
-                                padding: "8px 12px",
-                                borderRadius: 999,
-                                textAlign: "center",
-                                border: active ? "3px solid #ef4423" : "1px solid #d0dae8",
-                                background: "#ffffff",
-                                fontWeight: active ? 800 : 500,
-                                fontSize: 14,
-                                color: "#374b69",
-                              }}
-                            >
-                              {label}
-                            </div>
+                          <div
+                            className="stage-pill"
+                            style={{
+                              width: "100%",
+                              maxWidth: 66,
+                              height: 30,
+                              borderRadius: 16,
+                              border: active ? "2px solid #ff4b1f" : "2px solid #b6b6b6",
+                              background: "#ffffff",
+                              color: result ? "#666666" : "#bcbcbc",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 13,
+                              fontWeight: 500,
+                            }}
+                          >
+                            {slotLabel}
                           </div>
-                        );
-                      })}
-                    </div>
 
+                          {active && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: 28,
+                                left: "50%",
+                                transform: "translateX(-50%)",
+                                width: 0,
+                                height: 0,
+                                borderLeft: "11px solid transparent",
+                                borderRight: "11px solid transparent",
+                                borderTop: "20px solid #ff4b1f",
+                              }}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ marginBottom: 8 }}>
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(6, 1fr)",
-                        gap: 0,
-                        borderRadius: 8,
+                        gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr",
+                        height: 28,
                         overflow: "hidden",
-                        marginBottom: 14,
+                        borderRadius: 2,
                       }}
                     >
-                      {[
-                        { key: "red", color: "#c93631" },
-                        { key: "blue", color: "#3d65d7" },
-                        { key: "purple", color: "#7a45d1" },
-                        { key: "brown", color: "#aa602b" },
-                        { key: "yellow", color: "#d39b2a" },
-                        { key: "resolved", color: "transparent" },
-                      ].map((item) => (
-                        <div
-                          key={item.key}
-                          style={{
-                            height: 40,
-                            background:
-                              item.key === "resolved"
-                                ? "repeating-linear-gradient(45deg, rgba(0,0,0,0.04), rgba(0,0,0,0.04) 6px, rgba(0,0,0,0.01) 6px, rgba(0,0,0,0.01) 12px)"
-                                : item.color,
-                            border: item.key === "resolved" ? "2px dashed #cfdae8" : "none",
-                            boxSizing: "border-box",
-                          }}
-                        />
-                      ))}
-                    </div>
-
-                    <div style={{ marginBottom: 12 }}>
                       <div
                         style={{
-                          width: `${result.stageProgressPercent}%`,
-                          minWidth: 42,
-                          height: 14,
-                          background: "#334766",
-                          clipPath:
-                            "polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%)",
-                          borderRadius: 2,
+                          background: result ? "#d74236" : "#d7d7d7",
+                          border: "1px solid #bdbdbd",
+                          borderRight: "none",
+                        }}
+                      />
+                      <div
+                        style={{
+                          background: result ? "#5044c6" : "#d7d7d7",
+                          border: "1px solid #bdbdbd",
+                          borderRight: "none",
+                        }}
+                      />
+                      <div
+                        style={{
+                          background: result ? "#b06b38" : "#d7d7d7",
+                          border: "1px solid #bdbdbd",
+                          borderRight: "none",
+                        }}
+                      />
+                      <div
+                        style={{
+                          background: result ? "#dfa635" : "#d7d7d7",
+                          border: "1px solid #bdbdbd",
+                          borderRight: "none",
+                        }}
+                      />
+                      <div
+                        style={{
+                          background:
+                            "repeating-linear-gradient(45deg, #efefef, #efefef 8px, #d9d9d9 8px, #d9d9d9 12px)",
+                          border: "1px dashed #bdbdbd",
                         }}
                       />
                     </div>
+                  </div>
 
-                    <div
-                      style={{
-                        fontSize: 15,
-                        fontWeight: 800,
-                        color: "#2f425f",
-                      }}
-                    >
-                      Estimated stage
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr",
+                      gap: 6,
+                    }}
+                  >
+                    {["Early\nRed", "Blue\nPurple", "Brown\nGreen", "Yellow", "Resolved"].map(
+                      (label, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            textAlign: "center",
+                            whiteSpace: "pre-line",
+                            fontSize: 14,
+                            lineHeight: 1.28,
+                            color: result ? "#323232" : "#b4b4b4",
+                          }}
+                        >
+                          {label}
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                {!result ? (
+                  <div
+                    style={{
+                      color: "#b8b8b8",
+                      fontSize: 14,
+                      lineHeight: 1.45,
+                      maxWidth: 510,
+                    }}
+                  >
+                    <div style={{ marginBottom: 8 }}>
+                      Estimates the bruise healing stage from dominant bruise color patterns.
+                    </div>
+                    <div>
+                      This card will place the current bruise appearance within a simplified
+                      healing-stage model after analysis.
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: 14 }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          minWidth: 94,
+                          height: 44,
+                          padding: "0 18px",
+                          borderRadius: 14,
+                          background: "#dedede",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 18,
+                          fontWeight: 800,
+                          marginBottom: 12,
+                        }}
+                      >
+                        Stage {healingStage?.slot}
+                      </div>
+
+                      <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>
+                        {healingStage?.title}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 14,
+                          color: "#6b6b6b",
+                          lineHeight: 1.45,
+                          maxWidth: 530,
+                        }}
+                      >
+                        {healingStage?.description}
+                        {result.stageContextLine && <div style={{ marginTop: 8 }}>{result.stageContextLine}</div>}
+                      </div>
                     </div>
                   </>
                 )}
               </div>
 
-              <div
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #d9e2ef",
-                  borderRadius: 18,
-                  padding: 28,
-                  boxShadow: "0 2px 10px rgba(28,49,86,0.06)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 19,
-                    fontWeight: 850,
-                    color: "#233555",
-                    marginBottom: 18,
-                  }}
-                >
-                  Bruise intensity
+              <div className="card" style={{ minHeight: 330, padding: "16px 28px 18px 28px" }}>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>
+                  Quantitative summary
                 </div>
 
                 {!result ? (
-                  <div style={{ color: "#546884", fontSize: 14, lineHeight: 1.75 }}>
-                    This card estimates how visually strong the bruise core appears.
-                  </div>
-                ) : (
                   <>
                     <div
                       style={{
-                        color: "#546884",
-                        fontSize: 14,
-                        lineHeight: 1.75,
-                        marginBottom: 22,
+                        fontSize: 16,
+                        fontWeight: 800,
+                        color: "#b8b8b8",
+                        marginBottom: 14,
                       }}
                     >
-                      <div style={{ marginBottom: 4 }}>{result.intensityLines[0]}</div>
-                      <div>{result.intensityLines[1]}</div>
+                      Stage confidence
+                    </div>
+
+                    <div style={{ paddingLeft: 14, paddingRight: 14, marginBottom: 34 }}>
+                      <div style={{ display: "grid", gap: 12 }}>
+                        {summaryBars.map((item) => (
+                          <div
+                            key={item.key}
+                            className="confidence-row"
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "46px 1fr 92px",
+                              alignItems: "center",
+                              gap: 12,
+                            }}
+                          >
+                            <div style={{ fontSize: 14, color: "#b8b8b8" }}>{item.label}</div>
+                            <div
+                              style={{
+                                height: 10,
+                                background: "#d6d6d6",
+                                borderRadius: 999,
+                              }}
+                            />
+                            <div style={{ fontSize: 14, color: "#b8b8b8" }}>0.00 / 1.00</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: 14,
+                        color: "#b8b8b8",
+                        lineHeight: 1.45,
+                        maxWidth: 510,
+                      }}
+                    >
+                      Displays numerical indicators derived from the selected bruise region,
+                      including stage confidence and analysis scores.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 14 }}>
+                      Stage confidence
+                    </div>
+
+                    <div style={{ paddingLeft: 14, paddingRight: 14, marginBottom: 24 }}>
+                      <div style={{ display: "grid", gap: 12 }}>
+                        {summaryBars.map((item) => (
+                          <div
+                            key={item.key}
+                            className="confidence-row"
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "46px 1fr 92px",
+                              alignItems: "center",
+                              gap: 12,
+                            }}
+                          >
+                            <div style={{ fontSize: 14 }}>{item.label}</div>
+                            <div
+                              style={{
+                                height: 10,
+                                background: "#dddddd",
+                                borderRadius: 999,
+                                overflow: "hidden",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${Math.max(item.score * 100, 3)}%`,
+                                  height: "100%",
+                                  background: stageColor(item.key),
+                                  borderRadius: 999,
+                                }}
+                              />
+                            </div>
+                            <div style={{ fontSize: 14 }}>{formatScore(item.score)}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(4, 1fr)",
-                        gap: 18,
-                        alignItems: "start",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 14,
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: "#efefef",
+                          borderRadius: 3,
+                          padding: "16px 16px 14px 16px",
+                        }}
+                      >
+                        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>
+                          Bruise intensity score
+                        </div>
+                        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>
+                          {formatScore(result.intensityScore)}
+                        </div>
+                        <div style={{ fontSize: 14, color: "#6d6d6d" }}>{result.intensityLabel}</div>
+                      </div>
+
+                      <div
+                        style={{
+                          background: "#efefef",
+                          borderRadius: 3,
+                          padding: "16px 16px 14px 16px",
+                        }}
+                      >
+                        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>
+                          Selection consistency score
+                        </div>
+                        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>
+                          {formatScore(result.consistencyScore)}
+                        </div>
+                        <div style={{ fontSize: 14, color: "#6d6d6d" }}>
+                          {result.consistencyLabel}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </section>
+
+            {/* RIGHT COLUMN */}
+            <section style={{ display: "grid", gap: 26 }}>
+              <div className="card" style={{ minHeight: 276, padding: "16px 28px" }}>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 12 }}>
+                  Bruise intensity
+                </div>
+
+                {!result ? (
+                  <>
+                    <div
+                      style={{
+                        color: "#b8b8b8",
+                        fontSize: 14,
+                        lineHeight: 1.45,
+                        maxWidth: 360,
+                        marginBottom: 52,
+                      }}
+                    >
+                      Estimates how visually strong the bruise core appears relative to surrounding
+                      skin.
+                    </div>
+
+                    <div
+                      className="intensity-grid"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                        gap: 10,
+                      }}
+                    >
+                      {["Mild", "Moderate", "Strong", "Very Strong"].map((label) => (
+                        <div
+                          key={label}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 86,
+                              height: 86,
+                              borderRadius: "50%",
+                              background: "#f3f3f3",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              marginBottom: 16,
+                              padding: 8,
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                borderRadius: "50%",
+                                background: "#d3d3d3",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                padding: 8,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 54,
+                                  height: 54,
+                                  borderRadius: "50%",
+                                  background: "#a8a2a2",
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div
+                            className="choice-pill"
+                            style={{
+                              width: "100%",
+                              maxWidth: 102,
+                              height: 32,
+                              borderRadius: 16,
+                              border: "2px solid #c3c3c3",
+                              color: "#b8b8b8",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 13,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {label}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        color: "#6d6d6d",
+                        fontSize: 14,
+                        lineHeight: 1.45,
+                        maxWidth: 360,
+                        marginBottom: 22,
+                      }}
+                    >
+                      <div>{result.intensityLines[0]}</div>
+                      <div style={{ marginTop: 2 }}>{result.intensityLines[1]}</div>
+                    </div>
+
+                    <div
+                      className="intensity-grid"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                        gap: 10,
                       }}
                     >
                       {[
-                        { label: "Mild", color: "#b7b7b7" },
-                        { label: "Moderate", color: "#999999" },
-                        { label: "Strong", color: "#676767" },
-                        { label: "Very Strong", color: "#151821" },
+                        { label: "Mild", core: "#b8b4b4" },
+                        { label: "Moderate", core: "#a8a2a2" },
+                        { label: "Strong", core: "#787878" },
+                        { label: "Very Strong", core: "#111111" },
                       ].map((item, idx) => {
                         const active = intensityIndex(result.intensityLabel) === idx;
                         return (
@@ -2128,48 +2660,58 @@ export default function Home() {
                               display: "flex",
                               flexDirection: "column",
                               alignItems: "center",
-                              justifyContent: "flex-start",
-                              minHeight: 170,
                             }}
                           >
                             <div
                               style={{
-                                width: 104,
-                                height: 104,
+                                width: 86,
+                                height: 86,
                                 borderRadius: "50%",
-                                background: "#e6e6e6",
+                                background: "#f5f5f5",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                flexShrink: 0,
+                                marginBottom: 16,
+                                padding: 8,
                               }}
                             >
                               <div
                                 style={{
-                                  width: 78,
-                                  height: 78,
+                                  width: "100%",
+                                  height: "100%",
                                   borderRadius: "50%",
-                                  background: item.color,
-                                  boxShadow: "0 0 0 10px rgba(0,0,0,0.04)",
+                                  background: "#dddddd",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  padding: 8,
                                 }}
-                              />
+                              >
+                                <div
+                                  style={{
+                                    width: 54,
+                                    height: 54,
+                                    borderRadius: "50%",
+                                    background: item.core,
+                                  }}
+                                />
+                              </div>
                             </div>
 
                             <div
-                              className="analysis-pill"
+                              className="choice-pill"
                               style={{
-                                marginTop: 18,
-                                minWidth: item.label === "Very Strong" ? 126 : 104,
-                                textAlign: "center",
-                                padding: "9px 18px",
-                                borderRadius: 999,
-                                border: active ? "3px solid #ef4423" : "1px solid #d0dae8",
-                                background: "#ffffff",
-                                fontWeight: active ? 800 : 500,
-                                fontSize: 14,
-                                color: "#374b69",
-                                boxShadow: active ? "0 2px 8px rgba(239,68,35,0.08)" : "none",
-                                lineHeight: item.label === "Very Strong" ? 1.25 : 1.2,
+                                width: "100%",
+                                maxWidth: 102,
+                                height: 32,
+                                borderRadius: 16,
+                                border: active ? "2px solid #ff4b1f" : "2px solid #b7b7b7",
+                                color: "#666666",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 13,
+                                whiteSpace: "nowrap",
                               }}
                             >
                               {item.label}
@@ -2182,58 +2724,90 @@ export default function Home() {
                 )}
               </div>
 
-              <div
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #d9e2ef",
-                  borderRadius: 18,
-                  padding: 28,
-                  boxShadow: "0 2px 10px rgba(28,49,86,0.06)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 19,
-                    fontWeight: 850,
-                    color: "#233555",
-                    marginBottom: 18,
-                  }}
-                >
+              <div className="card" style={{ minHeight: 272, padding: "16px 28px" }}>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 12 }}>
                   Selection consistency
                 </div>
 
                 {!result ? (
-                  <div style={{ color: "#546884", fontSize: 14, lineHeight: 1.75 }}>
-                    This reflects how similar your bruise boundary selections were across repeated
-                    passes.
-                    <br />
-                    Higher consistency usually means the bruise boundary was easier to identify.
-                  </div>
+                  <>
+                    <div
+                      style={{
+                        color: "#b8b8b8",
+                        fontSize: 14,
+                        lineHeight: 1.45,
+                        maxWidth: 360,
+                        marginBottom: 108,
+                      }}
+                    >
+                      Measures how consistent the bruise boundary selections are across repeated
+                      passes.
+                    </div>
+
+                    <div
+                      className="consistency-grid"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                        gap: 16,
+                      }}
+                    >
+                      {["Low", "Moderate", "High"].map((label) => (
+                        <div
+                          key={label}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                          }}
+                        >
+                          <div
+                            className="choice-pill"
+                            style={{
+                              width: "100%",
+                              maxWidth: 76,
+                              height: 32,
+                              borderRadius: 16,
+                              border: "2px solid #c3c3c3",
+                              color: "#b8b8b8",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 13,
+                            }}
+                          >
+                            {label}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div
                       style={{
-                        color: "#546884",
+                        color: "#6d6d6d",
                         fontSize: 14,
-                        lineHeight: 1.75,
-                        marginBottom: 22,
+                        lineHeight: 1.45,
+                        maxWidth: 360,
+                        marginBottom: 18,
                       }}
                     >
-                      <div style={{ marginBottom: 4 }}>{result.consistencyMeaningLines[0]}</div>
-                      <div>{result.consistencyMeaningLines[1]}</div>
+                      <div>{result.consistencyMeaningLines[0]}</div>
+                      <div style={{ marginTop: 2 }}>{result.consistencyMeaningLines[1]}</div>
                     </div>
 
                     <div
+                      className="consistency-grid"
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(3, 1fr)",
-                        gap: 26,
-                        alignItems: "start",
+                        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                        gap: 16,
                       }}
                     >
                       {["Low", "Moderate", "High"].map((label, idx) => {
                         const active = consistencyIndex(result.consistencyLabel) === idx;
-                        const innerScale = idx === 0 ? 0.62 : idx === 1 ? 0.84 : 0.95;
+                        const innerScale = idx === 0 ? 0.6 : idx === 1 ? 0.84 : 0.96;
 
                         return (
                           <div
@@ -2242,16 +2816,16 @@ export default function Home() {
                               display: "flex",
                               flexDirection: "column",
                               alignItems: "center",
-                              justifyContent: "flex-start",
                             }}
                           >
                             <div
                               style={{
-                                width: 106,
-                                height: 106,
+                                width: 88,
+                                height: 88,
                                 borderRadius: "50%",
-                                background: "#f2d78a",
+                                background: "#eccf7d",
                                 position: "relative",
+                                marginBottom: 14,
                               }}
                             >
                               <div
@@ -2259,7 +2833,7 @@ export default function Home() {
                                   position: "absolute",
                                   inset: 7,
                                   borderRadius: "50%",
-                                  background: "#6bb7df",
+                                  background: "#7fc1ea",
                                 }}
                               />
                               <div
@@ -2267,29 +2841,28 @@ export default function Home() {
                                   position: "absolute",
                                   left: "50%",
                                   top: "50%",
-                                  width: 106 * innerScale,
-                                  height: 106 * innerScale,
+                                  width: 88 * innerScale,
+                                  height: 88 * innerScale,
                                   transform: "translate(-50%, -50%)",
                                   borderRadius: "50%",
-                                  background: "#7b7ee0",
+                                  background: "#7d7ae4",
                                 }}
                               />
                             </div>
 
                             <div
-                              className="analysis-pill"
+                              className="choice-pill"
                               style={{
-                                marginTop: 18,
-                                minWidth: 92,
-                                textAlign: "center",
-                                padding: "9px 18px",
-                                borderRadius: 999,
-                                border: active ? "3px solid #ef4423" : "1px solid #bfd0e6",
-                                background: "#ffffff",
-                                fontWeight: active ? 800 : 500,
-                                fontSize: 14,
-                                color: "#334766",
-                                boxShadow: active ? "0 2px 8px rgba(239,68,35,0.08)" : "none",
+                                width: "100%",
+                                maxWidth: 76,
+                                height: 32,
+                                borderRadius: 16,
+                                border: active ? "2px solid #ff4b1f" : "2px solid #b7b7b7",
+                                color: "#3f3f3f",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 13,
                               }}
                             >
                               {label}
@@ -2302,37 +2875,26 @@ export default function Home() {
                 )}
               </div>
 
-              <div
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #d9e2ef",
-                  borderRadius: 18,
-                  padding: 28,
-                  boxShadow: "0 2px 10px rgba(28,49,86,0.06)",
-                  color: "#546884",
-                  lineHeight: 1.75,
-                  fontSize: 14,
-                }}
-              >
+              <div className="card" style={{ minHeight: 134, padding: "16px 28px" }}>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 10 }}>Analysis note</div>
                 <div
                   style={{
-                    fontWeight: 850,
-                    color: "#233555",
-                    marginBottom: 12,
-                    fontSize: 19,
+                    color: "#777777",
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    maxWidth: 390,
                   }}
                 >
-                  Analysis note
+                  This tool provides an image-based interpretation only and does not diagnose a
+                  medical condition. Lighting, skin tone, camera quality, and selection choices can
+                  affect the result. Repeat photos taken 24 hours or more apart are more useful for
+                  recovery tracking.
                 </div>
-                This tool provides an image-based interpretation only and does not diagnose a
-                medical condition. Lighting, skin tone, camera quality, and selection choices can
-                affect the result. Repeat photos taken 24 hours or more apart are more useful for
-                recovery tracking.
               </div>
-            </div>
-          </aside>
-        </div>
-      </main>
+            </section>
+          </div>
+        </main>
+      </>
     </>
   );
 }
