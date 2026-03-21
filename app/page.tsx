@@ -1559,7 +1559,7 @@ export default function Home() {
                           alignItems: "center",
                           gap: 5,
                           color: stepTextColor(sidebarUploadDone),
-                          fontSize: 9.2,
+                          fontSize: 8.8,
                         }}
                       >
                         <ChevronIcon />
@@ -1571,7 +1571,7 @@ export default function Home() {
                           alignItems: "center",
                           gap: 5,
                           color: stepTextColor(sidebarSelectionDone),
-                          fontSize: 9.2,
+                          fontSize: 8.8,
                         }}
                       >
                         <ChevronIcon />
@@ -2181,7 +2181,7 @@ export default function Home() {
                 style={{
                   width: MAIN_W,
                   display: "grid",
-                  gridTemplateColumns: "minmax(0, 1fr) 280px",
+                  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
                   gap: 12,
                   alignItems: "start",
                   scrollMarginTop: 82,
@@ -2242,13 +2242,15 @@ export default function Home() {
                         <div
                           style={{
                             position: "absolute",
-                            left: `calc(${stageBarExpectedPosition}% - 7px)`,
+                            left: `${stageBarExpectedPosition}%`,
                             bottom: -14,
+                            transform: "translateX(-50%)",
                             width: 0,
                             height: 0,
-                            borderLeft: "7px solid transparent",
-                            borderRight: "7px solid transparent",
-                            borderTop: "20px solid #39c987",
+                            borderLeft: "9px solid transparent",
+                            borderRight: "9px solid transparent",
+                            borderTop: "24px solid #39c987",
+                            zIndex: 3,
                           }}
                         />
                       )}
@@ -2304,21 +2306,24 @@ export default function Home() {
                           </div>
                         ))}
 
-                        {stageBarVisualPosition !== null && (
-                          <div
-                            style={{
-                              position: "absolute",
-                              left: `calc(${stageBarVisualPosition}% - 7px)`,
-                              bottom: -18,
-                              width: 0,
-                              height: 0,
-                              borderLeft: "7px solid transparent",
-                              borderRight: "7px solid transparent",
-                              borderBottom: "20px solid #ff7b27",
-                            }}
-                          />
-                        )}
                       </div>
+
+                      {stageBarVisualPosition !== null && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: `${stageBarVisualPosition}%`,
+                            top: 48,
+                            transform: "translateX(-50%)",
+                            width: 0,
+                            height: 0,
+                            borderLeft: "9px solid transparent",
+                            borderRight: "9px solid transparent",
+                            borderBottom: "24px solid #ff7b27",
+                            zIndex: 3,
+                          }}
+                        />
+                      )}
                     </div>
 
                     <div
@@ -2367,10 +2372,9 @@ export default function Home() {
                         marginTop: 12,
                         borderRadius: 14,
                         background: "#dfe7f7",
-                        border: "2px solid #2d66ff",
+                        border: "1px solid #2d66ff",
                         padding: "14px 12px",
                         textAlign: "center",
-                        boxShadow: "0 5px 0 #2d66ff",
                       }}
                     >
                       <div style={{ fontSize: 11.5, lineHeight: 1.6, fontWeight: 800, color: "#1f5df0" }}>
@@ -2426,8 +2430,7 @@ export default function Home() {
                         marginTop: 16,
                         borderRadius: 14,
                         background: "#dfe7f7",
-                        border: "2px solid #2d66ff",
-                        boxShadow: "0 5px 0 #2d66ff",
+                        border: "1px solid #2d66ff",
                         padding: "13px 12px 14px",
                       }}
                     >
@@ -2461,7 +2464,7 @@ export default function Home() {
                 </div>
 
                 <div style={{ display: "grid", gap: 12 }}>
-                  <div className="card-soft" style={{ padding: 18 }}>
+                  <div className="card-soft" style={{ padding: 18, display: "flex", flexDirection: "column", minHeight: 332 }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: "#1d2b44", marginBottom: 14 }}>
                       Bruise intensity
                     </div>
@@ -2469,9 +2472,9 @@ export default function Home() {
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                        gap: 12,
-                        marginBottom: 12,
+                        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                        gap: 10,
+                        marginBottom: 16,
                       }}
                     >
                       {[
@@ -2485,8 +2488,8 @@ export default function Home() {
                           <div key={item.label} style={{ textAlign: "center" }}>
                             <div
                               style={{
-                                width: 56,
-                                height: 56,
+                                width: 60,
+                                height: 60,
                                 borderRadius: "50%",
                                 background: "#ededed",
                                 margin: "0 auto 8px",
@@ -2496,8 +2499,8 @@ export default function Home() {
                             >
                               <div
                                 style={{
-                                  width: 44,
-                                  height: 44,
+                                  width: 48,
+                                  height: 48,
                                   borderRadius: "50%",
                                   background: "#d9d9d9",
                                   display: "grid",
@@ -2506,8 +2509,8 @@ export default function Home() {
                               >
                                 <div
                                   style={{
-                                    width: 34,
-                                    height: 34,
+                                    width: 38,
+                                    height: 38,
                                     borderRadius: "50%",
                                     background: item.fill,
                                   }}
@@ -2517,8 +2520,8 @@ export default function Home() {
 
                             <div
                               style={{
-                                minHeight: 26,
-                                borderRadius: 13,
+                                height: 28,
+                                borderRadius: 14,
                                 border: active ? "1.8px solid #ff4b1f" : "1.4px solid #d9dee7",
                                 color: active ? "#334158" : "#9aa3b1",
                                 fontSize: 9.2,
@@ -2537,10 +2540,10 @@ export default function Home() {
 
                     <div
                       style={{
+                        marginTop: "auto",
                         borderRadius: 14,
                         background: "#dfe7f7",
-                        border: "2px solid #2d66ff",
-                        boxShadow: "0 5px 0 #2d66ff",
+                        border: "1px solid #2d66ff",
                         padding: "14px 12px",
                         textAlign: "center",
                         color: "#1f5df0",
@@ -2554,7 +2557,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="card-soft" style={{ padding: 0, overflow: "hidden" }}>
+                  <div className="card-soft" style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 332 }}>
                     <div style={{ padding: 18 }}>
                       <div style={{ fontSize: 14, fontWeight: 800, color: "#1d2b44", marginBottom: 14 }}>
                         Selection consistency
@@ -2628,13 +2631,10 @@ export default function Home() {
 
                     <div
                       style={{
-                        margin: "0 0 5px 0",
+                        margin: "auto 0 0 0",
                         borderRadius: 14,
                         background: "#dfe7f7",
-                        borderTop: "2px solid #2d66ff",
-                        borderLeft: "2px solid #2d66ff",
-                        borderRight: "2px solid #2d66ff",
-                        borderBottom: "5px solid #2d66ff",
+                        border: "1px solid #2d66ff",
                         padding: "14px 12px",
                         textAlign: "center",
                         color: "#1f5df0",
