@@ -422,7 +422,7 @@ export default function Page() {
         .consistency-pill.high.active{width:74px}
         .analysis-spacer-quant{height:198px}
         .analysis-blue-text{margin:0;color:#1f5eff;font-size:13px;line-height:1.45;font-weight:600;text-align:center}
-        .analysis-note-text{margin:30px 0 0 0;color:#727272;font-size:11px;line-height:15px;letter-spacing:-0.2px;font-weight:400}
+        .analysis-note-text{margin:30px 0 0 0;color:#727272;font-size:12px;line-height:15px;letter-spacing:0;font-weight:400}
         .analysis-blue-center{max-width:294px;margin:0 auto}
         .quant-card{padding:30px}
         .quant-title{margin:-10px 0 30px -10px;font-size:16px;line-height:1.1;font-weight:800;color:#111}
@@ -857,30 +857,30 @@ export default function Page() {
                     <div className="intensity-layout">
                       <div className="intensity-circle-row">
                         <div className="intensity-circle-item">
-                          <div className="intensity-circle-shell">
-                            <div className="intensity-circle-mid">
-                              <div className="intensity-circle-core" style={{background:"#bfbfbf"}} />
+                          <div className="intensity-circle-shell" style={{ background: "#FFF3D9" }}>
+                            <div className="intensity-circle-mid" style={{ background: "#F2D0A9" }}>
+                              <div className="intensity-circle-core" style={{ background: "#DFAD8C" }} />
                             </div>
                           </div>
                         </div>
                         <div className="intensity-circle-item">
-                          <div className="intensity-circle-shell">
-                            <div className="intensity-circle-mid">
-                              <div className="intensity-circle-core" style={{background:"#a7a7a7"}} />
+                          <div className="intensity-circle-shell" style={{ background: "#F8D9A8" }}>
+                            <div className="intensity-circle-mid" style={{ background: "#D0926F" }}>
+                              <div className="intensity-circle-core" style={{ background: "#9E755E" }} />
                             </div>
                           </div>
                         </div>
                         <div className="intensity-circle-item">
-                          <div className="intensity-circle-shell">
-                            <div className="intensity-circle-mid">
-                              <div className="intensity-circle-core" style={{background:"#7d7d7d"}} />
+                          <div className="intensity-circle-shell" style={{ background: "#D3A488" }}>
+                            <div className="intensity-circle-mid" style={{ background: "#A07262" }}>
+                              <div className="intensity-circle-core" style={{ background: "#6C504A" }} />
                             </div>
                           </div>
                         </div>
                         <div className="intensity-circle-item">
-                          <div className="intensity-circle-shell">
-                            <div className="intensity-circle-mid">
-                              <div className="intensity-circle-core" style={{background:"#1b1b1d"}} />
+                          <div className="intensity-circle-shell" style={{ background: "#B0827A" }}>
+                            <div className="intensity-circle-mid" style={{ background: "#71494C" }}>
+                              <div className="intensity-circle-core" style={{ background: "#2B1E2F" }} />
                             </div>
                           </div>
                         </div>
