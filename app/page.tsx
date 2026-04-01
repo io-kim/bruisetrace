@@ -391,7 +391,7 @@ export default function Page() {
         .analysis-white-pad20{padding:20px 20px 40px}
         .analysis-blue-card{width:345px;background:#eaf0ff;border-radius:8px;position:relative;z-index:2;overflow:hidden;box-shadow:inset 0 0 0 1px #155dfc}
         .analysis-pair .analysis-blue-card{width:100%;border-radius:8px;margin-top:0}
-        .analysis-blue-pad26{padding:24px 26px 22px 26px}
+        .analysis-blue-pad26{padding:26px 25px}
         .analysis-note-card{width:345px;background:var(--card);border-radius:8px;box-shadow:inset 0 0 0 1px var(--line);padding:20px 20px 30px}
         .analysis-card-title{margin:0;font-size:16px;line-height:1.1;font-weight:800;color:#111}
         .analysis-spacer-intensity{height:148px}
@@ -400,10 +400,19 @@ export default function Page() {
         .analysis-blue-text{margin:0;color:#1f5eff;font-size:13px;line-height:1.45;font-weight:600;text-align:center}
         .analysis-note-text{margin:18px 0 0 0;color:#787878;font-size:10px;line-height:1.35;font-weight:500}
         .analysis-blue-center{max-width:294px;margin:0 auto}
-        .analysis-blue-score-grid{display:grid;grid-template-columns:118px 150px;column-gap:14px;align-items:start;justify-content:space-between}
-        .analysis-blue-score-label{margin:0 0 6px 0;color:#1f5eff;font-size:11px;line-height:1.25;font-weight:600;text-align:left}
-        .analysis-blue-score-value{margin:0;color:#1f5eff;font-size:17px;line-height:1.1;font-weight:700;text-align:left}
-        .analysis-blue-score-meta{margin:6px 0 0 0;color:#1f5eff;font-size:13px;line-height:1.2;font-weight:600;text-align:left}
+        .quant-card{padding:30px}
+        .quant-title{margin:-10px 0 30px -10px;font-size:16px;line-height:1.1;font-weight:800;color:#111}
+        .quant-table{width:265px;margin:0 auto;display:grid;row-gap:14px}
+        .quant-row{width:285px;display:grid;grid-template-columns:48px 138px 59px;column-gap:12px;align-items:center;height:20px}
+        .quant-label{width:48px;margin:0;padding:0;color:#727272;font-size:11px;line-height:15px;letter-spacing:-0.2px;font-weight:600;text-align:left;white-space:nowrap}
+        .quant-bar{width:138px;height:9px;border-radius:999px;background:#d9dce2;overflow:hidden;flex:0 0 auto}
+        .quant-fill{height:9px;border-radius:999px}
+        .quant-score{width:59px;margin:0;padding:0;color:#727272;font-size:11px;line-height:15px;letter-spacing:-0.2px;font-weight:400;text-align:right;white-space:nowrap}
+        .analysis-blue-pad26{padding:26px 25px}
+        .analysis-blue-score-grid{width:295px;margin:0 auto;display:grid;grid-template-columns:118px 147px;column-gap:30px;align-items:start}
+        .analysis-blue-score-label{margin:0 0 6px 0;color:#1f5eff;font-size:11px;line-height:15px;letter-spacing:-0.2px;font-weight:600;text-align:left;white-space:nowrap}
+        .analysis-blue-score-value{margin:0;color:#1f5eff;font-size:17px;line-height:1.05;font-weight:700;text-align:left}
+        .analysis-blue-score-meta{margin:6px 0 0 0;color:#1f5eff;font-size:13px;line-height:15px;letter-spacing:-0.2px;font-weight:600;text-align:left}
         .healing-stack{margin-top:30px;display:grid;row-gap:17px}
         .healing-stage-card{position:relative;width:100%;background:#fff;border-radius:8px}
         .healing-stage-card.expected{height:65px;box-shadow:inset 0 0 0 1px #33c45a}
@@ -766,9 +775,35 @@ export default function Page() {
                   </div>
                 </div>
                 <div className="analysis-pair">
-                  <div className="analysis-white-card analysis-white-pad20">
-                    <h3 className="analysis-card-title">Quantitative summary</h3>
-                    <div className="analysis-spacer-quant" />
+                  <div className="analysis-white-card quant-card">
+                    <h3 className="quant-title">Quantitative summary</h3>
+                    <div className="quant-table">
+                      <div className="quant-row">
+                        <p className="quant-label">Red</p>
+                        <div className="quant-bar"><div className="quant-fill" style={{ width: "88px", background: "#f41616" }} /></div>
+                        <p className="quant-score">0.00 / 1.00</p>
+                      </div>
+                      <div className="quant-row">
+                        <p className="quant-label">Blue</p>
+                        <div className="quant-bar"><div className="quant-fill" style={{ width: "88px", background: "#2450db" }} /></div>
+                        <p className="quant-score">0.00 / 1.00</p>
+                      </div>
+                      <div className="quant-row">
+                        <p className="quant-label">Purple</p>
+                        <div className="quant-bar"><div className="quant-fill" style={{ width: "88px", background: "#8f17df" }} /></div>
+                        <p className="quant-score">0.00 / 1.00</p>
+                      </div>
+                      <div className="quant-row">
+                        <p className="quant-label">Brown</p>
+                        <div className="quant-bar"><div className="quant-fill" style={{ width: "88px", background: "#b26b3b" }} /></div>
+                        <p className="quant-score">0.00 / 1.00</p>
+                      </div>
+                      <div className="quant-row">
+                        <p className="quant-label">Yellow</p>
+                        <div className="quant-bar"><div className="quant-fill" style={{ width: "88px", background: "#f4bf3a" }} /></div>
+                        <p className="quant-score">0.00 / 1.00</p>
+                      </div>
+                    </div>
                   </div>
                   <div className="analysis-blue-card">
                     <div className="analysis-blue-pad26">
