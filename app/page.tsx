@@ -314,9 +314,9 @@ export default function Page() {
         .header-inner{width:100%;max-width:${DESKTOP_OUTER_WIDTH}px;height:${HEADER_HEIGHT}px;margin:0 auto;padding:0 18px;display:flex;align-items:center;justify-content:space-between}
         .header-left{display:flex;align-items:center;gap:28px;min-width:0}
         .brand{font-size:22px;font-weight:800;color:#fff;line-height:1;white-space:nowrap}
-        .tagline{font-size:10px;color:var(--header-accent);line-height:1.1;white-space:nowrap}
+        .tagline{font-size:12px;color:var(--header-accent);line-height:1.1;white-space:nowrap}
         .header-right{display:flex;align-items:center;gap:12px;color:#fff}
-        .username{font-size:10px;line-height:1;white-space:nowrap}
+        .username{font-size:12px;line-height:1;white-space:nowrap}
         .avatar{width:32px;height:32px;border-radius:999px;background:#eff4fb;color:#8b25ff;display:grid;place-items:center;flex:0 0 auto}
         .desktop-shell{width:${DESKTOP_OUTER_WIDTH}px;margin:0 auto;padding:10px 18px 28px;min-height:calc(100vh - 60px);overflow:hidden}
         .desktop-inner{width:${DESKTOP_INNER_WIDTH}px;display:grid;row-gap:0}
@@ -337,7 +337,7 @@ export default function Page() {
         .side-title.active,.side-step.active{color:var(--blue)}
         .side-step-group{display:grid;gap:18px}
         .side-steps{display:grid;gap:16px;padding-left:24px}
-        .side-step{margin:0;font-size:10px;line-height:1.25;font-weight:600;color:#222}
+        .side-step{margin:0;font-size:12px;line-height:1.25;font-weight:600;color:#222}
         .side-analysis-list{display:grid;gap:40px}
         .side-analysis-item{margin:0;font-size:12px;line-height:1.2;font-weight:700;color:#202020}
         .card{background:var(--card);border-radius:8px;box-shadow:inset 0 0 0 1px var(--line)}
@@ -349,12 +349,12 @@ export default function Page() {
         .copy-title{margin:0;font-size:15px;line-height:1.25;font-weight:800;color:#222;text-align:right}
         .copy-sub{margin:4px 0 0 0;font-size:14px;line-height:1.25;color:#2f2f2f;text-align:right}
         .age-grid{width:430px;margin-top:62px;display:grid;grid-template-columns:repeat(4,100px);justify-content:start;gap:10px}
-        .age-btn{width:100px;height:32px;border-radius:10px;border:1px solid #bebebe;background:#fff;color:#747474;font-size:10px;font-weight:500;cursor:pointer}
+        .age-btn{width:100px;height:32px;border-radius:10px;border:1px solid #bebebe;background:#fff;color:#747474;font-size:12px;font-weight:500;cursor:pointer}
         .age-btn:hover{box-shadow:var(--shadow-btn)}
         .age-btn.active{background:var(--blue);border:1.5px solid var(--blue);color:#fff;box-shadow:var(--shadow-btn)}
         .guided-controls{width:430px;margin-top:62px;display:grid;grid-template-columns:repeat(3,137px);justify-content:start;gap:10px}
         .guided-col{display:grid;gap:12px}
-        .tool-btn{width:137px;height:32px;border-radius:10px;border:1px solid #bebebe;background:#fff;color:#747474;font-size:10px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+        .tool-btn{width:137px;height:32px;border-radius:10px;border:1px solid #bebebe;background:#fff;color:#747474;font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px}
         .tool-btn:hover{box-shadow:var(--shadow-btn)}
         .tool-btn.upload{border-color:var(--blue);color:var(--blue);font-weight:700}
         .tool-btn.active{background:var(--blue);border:1.5px solid var(--blue);color:#fff;box-shadow:var(--shadow-btn)}
@@ -374,10 +374,10 @@ export default function Page() {
         .pass-card.active{background:#eef4ff;box-shadow:inset 0 0 0 1.5px #89a9ff}
         .pass-card.disabled{cursor:not-allowed}
         .pass-title{margin:0;font-size:16px;line-height:1;font-weight:800;color:#151515;text-align:right}
-        .pass-row{display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:10px;line-height:1.2;font-weight:700;color:#1f1f1f}
+        .pass-row{display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:12px;line-height:1.2;font-weight:700;color:#1f1f1f}
         .pass-row input{width:16px;height:16px;margin:0}
-        .pass-meta{margin:0;min-height:12px;font-size:10px;line-height:1.25;color:#2d2d2d;text-align:right}
-        .pass-btn{width:95px;height:32px;justify-self:end;border-radius:10px;border:1px solid #bebebe;background:#fff;color:#7b7b7b;font-size:10px;line-height:1;font-weight:500;cursor:pointer}
+        .pass-meta{margin:0;min-height:12px;font-size:12px;line-height:1.25;color:#2d2d2d;text-align:right}
+        .pass-btn{width:95px;height:32px;justify-self:end;border-radius:10px;border:1px solid #bebebe;background:#fff;color:#7b7b7b;font-size:12px;line-height:1;font-weight:500;cursor:pointer}
         .pass-btn.active{background:var(--blue);border:1.5px solid var(--blue);color:#fff;box-shadow:var(--shadow-btn)}
         .pass-btn:disabled{opacity:.45;cursor:not-allowed}
         .analyze-btn{width:${INFO_COL3}px;height:${ANALYZE_HEIGHT}px;border-radius:10px;border:1px solid #ff4343;background:#fff;color:#ff4343;font-size:16px;line-height:1;font-weight:700;cursor:default}
@@ -388,17 +388,27 @@ export default function Page() {
         .analysis-pair{width:345px;background:var(--card);border-radius:8px;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden;display:grid;row-gap:0}
         .analysis-white-card{width:345px;background:var(--card);border-radius:8px;box-shadow:inset 0 0 0 1px var(--line)}
         .analysis-pair .analysis-white-card{width:100%;background:transparent;border-radius:0;box-shadow:none}
-        .analysis-white-pad20{padding:20px 20px 40px}
+        .analysis-white-pad20{padding:20px}
         .analysis-blue-card{width:345px;background:#eaf0ff;border-radius:8px;position:relative;z-index:2;overflow:hidden;box-shadow:inset 0 0 0 1px #155dfc}
         .analysis-pair .analysis-blue-card{width:100%;border-radius:8px;margin-top:0}
         .analysis-blue-pad26{padding:26px 25px}
         .analysis-note-card{width:345px;background:var(--card);border-radius:8px;box-shadow:inset 0 0 0 1px var(--line);padding:20px 20px 30px}
         .analysis-card-title{margin:0;font-size:16px;line-height:1.1;font-weight:800;color:#111}
-        .analysis-spacer-intensity{height:148px}
+        .analysis-spacer-intensity{height:auto}
+        .intensity-layout{padding:20px 0 0;display:flex;flex-direction:column;align-items:center}
+        .intensity-circle-row{width:305px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
+        .intensity-circle-item{width:72px;display:flex;justify-content:center;align-items:center;flex:0 0 auto}
+        .intensity-circle-shell{width:57px;height:57px;border-radius:999px;background:#e9e9e9;display:grid;place-items:center}
+        .intensity-circle-mid{width:47px;height:47px;border-radius:999px;background:#d7d7d7;display:grid;place-items:center}
+        .intensity-circle-core{width:39px;height:39px;border-radius:999px}
+        .intensity-buttons-row{width:305px;margin:10px auto 0;display:flex;justify-content:space-between;align-items:center}
+        .intensity-pill{width:72px;height:25px;border-radius:999px;background:#fff;box-shadow:inset 0 0 0 1px #bfbfbf;display:inline-flex;align-items:center;justify-content:center;color:#bfbfbf;font-size:12px;line-height:20px;letter-spacing:-0.5px;font-weight:500;white-space:nowrap}
+        .intensity-pill.active{width:74px;height:27px;box-shadow:inset 0 0 0 1.5px #ff383c;color:#727272}
+
         .analysis-spacer-consistency{height:148px}
         .analysis-spacer-quant{height:198px}
         .analysis-blue-text{margin:0;color:#1f5eff;font-size:13px;line-height:1.45;font-weight:600;text-align:center}
-        .analysis-note-text{margin:18px 0 0 0;color:#787878;font-size:10px;line-height:1.35;font-weight:500}
+        .analysis-note-text{margin:18px 0 0 0;color:#787878;font-size:12px;line-height:1.35;font-weight:500}
         .analysis-blue-center{max-width:294px;margin:0 auto}
         .quant-card{padding:30px}
         .quant-title{margin:-10px 0 30px -10px;font-size:16px;line-height:1.1;font-weight:800;color:#111}
@@ -420,8 +430,8 @@ export default function Page() {
         .healing-stage-inner{height:100%;padding:13px 10px;display:flex;align-items:center;justify-content:space-between;gap:14px}
         .healing-stage-copy{min-width:0;display:flex;flex-direction:column;justify-content:center}
         .healing-stage-title{margin:0 0 8px 0;font-size:12px;line-height:15px;font-weight:700;letter-spacing:-0.45px;color:#1a1a1a}
-        .healing-stage-line{margin:0;font-size:10px;line-height:15px;font-weight:400;letter-spacing:-0.2px;color:#727272}
-        .healing-stage-badge{width:45px;height:45px;border-radius:999px;display:grid;place-items:center;flex:0 0 auto;font-size:10px;line-height:15px;font-weight:400;letter-spacing:-0.2px;color:#727272}
+        .healing-stage-line{margin:0;font-size:12px;line-height:15px;font-weight:400;letter-spacing:-0.2px;color:#727272}
+        .healing-stage-badge{width:45px;height:45px;border-radius:999px;display:grid;place-items:center;flex:0 0 auto;font-size:12px;line-height:15px;font-weight:400;letter-spacing:-0.2px;color:#727272}
         .healing-stage-badge.expected{background:#cfffd8}
         .healing-stage-badge.visual{background:#ffe6d0}
         .healing-pointer{position:absolute;left:50%;transform:translateX(-50%);width:6px;height:16.5px}
@@ -759,7 +769,7 @@ export default function Page() {
                           <div className="healing-stage-copy">
                             <p className="healing-stage-title">Visual</p>
                             <p className="healing-stage-line">Current visual stage (image-based)</p>
-                            <p className="healing-stage-line">The image most closely matches the Yellow<br />stage.</p>
+                            <p className="healing-stage-line">The image most closely matches the Yellow stage.</p>
                           </div>
                           <div className="healing-stage-badge visual">Red</div>
                         </div>
@@ -830,7 +840,44 @@ export default function Page() {
                 <div className="analysis-pair">
                   <div className="analysis-white-card analysis-white-pad20">
                     <h3 className="analysis-card-title">Bruise intensity</h3>
-                    <div className="analysis-spacer-intensity" />
+                    <div className="intensity-layout">
+                      <div className="intensity-circle-row">
+                        <div className="intensity-circle-item">
+                          <div className="intensity-circle-shell">
+                            <div className="intensity-circle-mid">
+                              <div className="intensity-circle-core" style={{background:"#bfbfbf"}} />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="intensity-circle-item">
+                          <div className="intensity-circle-shell">
+                            <div className="intensity-circle-mid">
+                              <div className="intensity-circle-core" style={{background:"#a7a7a7"}} />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="intensity-circle-item">
+                          <div className="intensity-circle-shell">
+                            <div className="intensity-circle-mid">
+                              <div className="intensity-circle-core" style={{background:"#7d7d7d"}} />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="intensity-circle-item">
+                          <div className="intensity-circle-shell">
+                            <div className="intensity-circle-mid">
+                              <div className="intensity-circle-core" style={{background:"#1b1b1d"}} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="intensity-buttons-row">
+                        <div className="intensity-circle-item"><div className="intensity-pill">Moderate</div></div>
+                        <div className="intensity-circle-item"><div className="intensity-pill">Mild</div></div>
+                        <div className="intensity-circle-item"><div className="intensity-pill active">Strong</div></div>
+                        <div className="intensity-circle-item"><div className="intensity-pill">Very Strong</div></div>
+                      </div>
+                    </div>
                   </div>
                   <div className="analysis-blue-card">
                     <div className="analysis-blue-pad26">
