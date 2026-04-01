@@ -393,7 +393,7 @@ export default function Page() {
         .analysis-pair .analysis-blue-card{width:100%;border-radius:8px;margin-top:0}
         .analysis-blue-pad26{padding:26px 25px}
         .analysis-note-card{width:345px;background:var(--card);border-radius:8px;box-shadow:inset 0 0 0 1px var(--line);padding:20px 20px 30px}
-        .analysis-card-title{margin:0;font-size:16px;line-height:1.1;font-weight:800;color:#111}
+        .analysis-card-title{margin:0;font-size:16px;line-height:12px;font-weight:700;letter-spacing:0;color:#1A1A1A}
         .analysis-spacer-intensity{height:auto}
         .intensity-layout{padding:20px 0 0;display:flex;flex-direction:column;align-items:center}
         .intensity-circle-row{width:305px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
@@ -405,10 +405,24 @@ export default function Page() {
         .intensity-pill{width:72px;height:25px;border-radius:999px;background:#fff;box-shadow:inset 0 0 0 1px #bfbfbf;display:inline-flex;align-items:center;justify-content:center;color:#bfbfbf;font-size:12px;line-height:20px;letter-spacing:-0.5px;font-weight:500;white-space:nowrap}
         .intensity-pill.active{width:74px;height:27px;box-shadow:inset 0 0 0 1.5px #ff383c;color:#727272}
 
-        .analysis-spacer-consistency{height:148px}
+        .analysis-spacer-consistency{height:auto}
+        .consistency-layout{width:305px;margin:20px auto 0;display:flex;flex-direction:column;align-items:center}
+        .consistency-row-3{width:305px;display:grid;grid-template-columns:repeat(3,1fr);justify-items:center;align-items:center}
+        .consistency-circle-shell{width:57px;height:57px;border-radius:999px;background:#efd58b;display:grid;place-items:center}
+        .consistency-circle-mid{border-radius:999px;background:#73b8ea;display:grid;place-items:center}
+        .consistency-circle-core{border-radius:999px;background:#7e80de}
+        .consistency-buttons-row{margin-top:10px}
+        .consistency-pill{height:25px;border-radius:999px;background:#fff;box-shadow:inset 0 0 0 1px #bfbfbf;display:inline-flex;align-items:center;justify-content:center;color:#bfbfbf;font-size:12px;line-height:20px;letter-spacing:-0.5px;font-weight:500;white-space:nowrap}
+        .consistency-pill.low{width:72px}
+        .consistency-pill.moderate{width:84px}
+        .consistency-pill.high{width:72px}
+        .consistency-pill.active{height:27px;box-shadow:inset 0 0 0 1.5px #ff383c;color:#727272}
+        .consistency-pill.low.active{width:74px}
+        .consistency-pill.moderate.active{width:86px}
+        .consistency-pill.high.active{width:74px}
         .analysis-spacer-quant{height:198px}
         .analysis-blue-text{margin:0;color:#1f5eff;font-size:13px;line-height:1.45;font-weight:600;text-align:center}
-        .analysis-note-text{margin:18px 0 0 0;color:#787878;font-size:12px;line-height:1.35;font-weight:500}
+        .analysis-note-text{margin:30px 0 0 0;color:#727272;font-size:11px;line-height:15px;letter-spacing:-0.2px;font-weight:400}
         .analysis-blue-center{max-width:294px;margin:0 auto}
         .quant-card{padding:30px}
         .quant-title{margin:-10px 0 30px -10px;font-size:16px;line-height:1.1;font-weight:800;color:#111}
@@ -444,8 +458,8 @@ export default function Page() {
         .healing-stage-seg.s1,.healing-stage-seg.s2,.healing-stage-seg.s3,.healing-stage-seg.s4{color:#fff}
         .healing-stage-seg.s5{color:#111}
         
-        .analysis-note-top{display:flex;align-items:center;justify-content:space-between}
-        .note-icon{width:30px;height:30px;border-radius:999px;border:1px solid #8a8a8a;color:#8a8a8a;display:grid;place-items:center;font-size:18px;font-weight:700}
+        .analysis-note-top{display:flex;align-items:flex-start;justify-content:space-between}
+        .note-icon{width:20px;height:20px;border-radius:999px;border:1px solid #8a8a8a;color:#8a8a8a;display:grid;place-items:center;font-size:12px;font-weight:700;flex:0 0 auto}
         .analysis-section-gap{height:0}
         .alert-overlay{position:fixed;inset:0;background:rgba(18,24,38,.22);display:flex;align-items:center;justify-content:center;z-index:200}
         .alert-modal{width:360px;max-width:calc(100vw - 32px);background:#fff;border-radius:8px;box-shadow:0 18px 36px rgba(25,35,58,.18);padding:22px 22px 18px;text-align:center}
@@ -890,7 +904,30 @@ export default function Page() {
                 <div className="analysis-pair">
                   <div className="analysis-white-card analysis-white-pad20">
                     <h3 className="analysis-card-title">Selection consistency</h3>
-                    <div className="analysis-spacer-consistency" />
+                    <div className="consistency-layout">
+                      <div className="consistency-row-3">
+                        <div className="consistency-circle-shell" style={{ background: "#FFE092" }}>
+                          <div className="consistency-circle-mid" style={{ width: "43px", height: "43px", background: "#C78C62" }}>
+                            <div className="consistency-circle-core" style={{ width: "29px", height: "29px", background: "#744C5F" }} />
+                          </div>
+                        </div>
+                        <div className="consistency-circle-shell" style={{ background: "#FFE092" }}>
+                          <div className="consistency-circle-mid" style={{ width: "47px", height: "47px", background: "#C78C62" }}>
+                            <div className="consistency-circle-core" style={{ width: "37px", height: "37px", background: "#744C5F" }} />
+                          </div>
+                        </div>
+                        <div className="consistency-circle-shell" style={{ background: "#FFE092" }}>
+                          <div className="consistency-circle-mid" style={{ width: "51px", height: "51px", background: "#C78C62" }}>
+                            <div className="consistency-circle-core" style={{ width: "45px", height: "45px", background: "#744C5F" }} />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="consistency-row-3 consistency-buttons-row">
+                        <div className="consistency-pill low">Low</div>
+                        <div className="consistency-pill moderate active">Moderate</div>
+                        <div className="consistency-pill high">High</div>
+                      </div>
+                    </div>
                   </div>
                   <div className="analysis-blue-card">
                     <div className="analysis-blue-pad26">
