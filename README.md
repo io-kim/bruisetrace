@@ -9,10 +9,10 @@ BruiseTrace explores how image analysis and user-guided segmentation can help tr
 ## Prototype (v0.3)
 
 ### Guided Selection Flow
-![Guided Selection](guided_selection_v03.png)
+![Guided Selection](public/guided_selection_v03.png)
 
 ### Analysis Result
-![Analysis Result](analysis_v03.png)
+![Analysis Result](public/analysis_v03.png)
 
 ---
 
