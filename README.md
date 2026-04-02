@@ -4,11 +4,19 @@ AI-powered bruise analysis tool designed to support **inclusive skin tone assess
 
 BruiseTrace explores how image analysis and user-guided segmentation can help track bruise development more clearly across different skin tones.
 
-## Prototype (v0.2)
+---
 
-![BruiseTrace prototype](bruisetrace_v02.png)
+## Prototype (v0.3)
 
-Live demo  
+### Guided Selection Flow
+![Guided Selection](public/guided_selection_v03.png)
+
+### Analysis Result
+![Analysis Result](public/analysis_v03.png)
+
+---
+
+## Live Demo
 https://bruisetrace.vercel.app
 
 ---
@@ -20,16 +28,16 @@ Many visual assessment tools are not designed with inclusive skin analysis in mi
 
 BruiseTrace experiments with a simple approach:
 
-- User-guided bruise region selection
-- Color stage analysis
-- Intensity scoring
-- Selection consistency checking
+- User-guided bruise region selection  
+- Color stage analysis  
+- Intensity scoring  
+- Selection consistency checking  
 
 ---
 
 ## Features
 
-- Guided bruise region selection
+- Guided bruise region selection (3-pass system: Tight, Balanced, Broad)
 - Color stage estimation
 - Bruise intensity score
 - Selection consistency score
@@ -39,32 +47,32 @@ BruiseTrace experiments with a simple approach:
 
 ## Technology
 
-- Next.js
-- TypeScript
-- Canvas image processing
-- Vercel deployment
+- Next.js  
+- TypeScript  
+- Canvas image processing  
+- Vercel deployment  
 
 ---
 
 ## Development Status
 
-Current version: **v0.2 prototype**
+Current version: **v0.3 (UI + interaction stable, analysis logic in progress)**
 
-Planned improvements
+Planned improvements:
 
-- Improved bruise stage classification
-- Better color normalization across lighting
-- More robust ROI detection
-- Visual progress tracking across multiple images
+- Improved bruise stage classification  
+- Better color normalization across lighting  
+- More robust ROI detection  
+- Visual progress tracking across multiple images  
 
 ---
 
 ## Future Development
 
-- Bruise healing timeline estimation
-- Multi-image comparison
-- Medical research dataset testing
-- Expanded inclusive skin tone calibration
+- Bruise healing timeline estimation  
+- Multi-image comparison  
+- Medical research dataset testing  
+- Expanded inclusive skin tone calibration  
 
 ---
 
