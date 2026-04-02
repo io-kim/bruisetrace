@@ -9,10 +9,10 @@ BruiseTrace explores how image analysis and user-guided segmentation can help tr
 ## Prototype (v0.3)
 
 ### Guided Selection Flow
-![Guided Selection](/guided_selection_v03.png)
+![Guided Selection](guided_selection_v03.png)
 
 ### Analysis Result
-![Analysis Result](/analysis_v03.png)
+![Analysis Result](analysis_v03.png)
 
 ---
 
@@ -37,11 +37,11 @@ BruiseTrace experiments with a simple approach:
 
 ## Features
 
-- Guided bruise region selection (3-pass system: Tight, Balanced, Broad)
-- Color stage estimation
-- Bruise intensity score
-- Selection consistency score
-- Canvas-based image analysis
+- Guided bruise region selection  
+- Color stage estimation  
+- Bruise intensity score  
+- Selection consistency score  
+- Canvas-based image analysis  
 
 ---
 
@@ -56,7 +56,7 @@ BruiseTrace experiments with a simple approach:
 
 ## Development Status
 
-Current version: **v0.3 (UI + interaction stable, analysis logic in progress)**
+Current version: **v0.3 prototype**
 
 Planned improvements:
 
