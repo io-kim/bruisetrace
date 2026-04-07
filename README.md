@@ -10,20 +10,20 @@ BruiseTrace explores how image analysis and user-guided segmentation can help tr
 
 ### Information & Guided Selection
 
-![Information Flow](/screenshots/info_selection.png)
+![Information Flow](public/screenshots/info_selection.png)
 
 ---
 
 ### Analysis Results
 
 #### Case 1 — Healing mismatch (expected vs visual difference)
-![Healing Mismatch](/screenshots/result_mismatch.png)
+![Healing Mismatch](public/screenshots/result_mismatch.png)
 
 #### Case 2 — Healing aligned (expected ≈ visual)
-![Healing Aligned](/screenshots/result_aligned.png)
+![Healing Aligned](public/screenshots/result_aligned.png)
 
 #### Case 3 — Late-stage yellow bruise detection
-![Healing Result](/screenshots/result_healing.png)
+![Healing Result](public/screenshots/result_healing.png)
 
 ---
 
