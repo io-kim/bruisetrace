@@ -43,9 +43,6 @@ type AnalysisData = {
   visualSummary: string;
   intensitySummary: string;
   consistencySummary: string;
-  dominantRatio: number;
-  secondaryRatio: number;
-  coreDensity: number;
 };
 
 function UserIcon() {
@@ -147,6 +144,51 @@ function stageLabel(stage: StageKey) {
   }
 }
 
+function getVisualSummary(stage: StageKey, scores: Record<StageKey, number>) {
+  if (stage === "brown" && scores.yellow >= 0.22) {
+    return "The image most closely matches the Brown stage, with visible yellowing that suggests a later healing transition.";
+  }
+  if (stage === "yellow" && scores.brown >= 0.22) {
+    return "The image most closely matches the Yellow stage, while some remaining brown discoloration suggests the bruise is still transitioning.";
+  }
+  if (stage === "purple" && scores.brown >= 0.18) {
+    return "The image most closely matches the Purple stage, with some brown transition already visible.";
+  }
+  return `The image most closely matches the ${stageLabel(stage)} stage.`;
+}
+
+function getIntensitySummary(intensityLabel: IntensityLabel, opts: { concentratedCore: boolean; smallAreaHighContrast: boolean }) {
+  const { concentratedCore, smallAreaHighContrast } = opts;
+
+  if (intensityLabel === "Very Strong") {
+    return concentratedCore
+      ? "The bruise shows a dense dark core with very strong local contrast. The overall intensity is interpreted as Very Strong."
+      : "The bruise appears very dark overall with strong visual prominence. The overall intensity is interpreted as Very Strong.";
+  }
+
+  if (intensityLabel === "Strong") {
+    return concentratedCore
+      ? "The bruise shows a concentrated dark core and elevated contrast. The overall intensity is interpreted as Strong."
+      : "The bruise appears noticeably dark overall. The overall intensity is interpreted as Strong.";
+  }
+
+  if (intensityLabel === "Moderate") {
+    if (smallAreaHighContrast) {
+      return "The bruise occupies a relatively small area, but local contrast remains strong enough to raise the overall intensity into the Moderate range.";
+    }
+    return concentratedCore
+      ? "The bruise includes a concentrated dark core, while the surrounding area remains less intense. The overall intensity is interpreted as Moderate."
+      : "The bruise appears moderately visible in contrast. The overall intensity is interpreted as Moderate.";
+  }
+
+  if (smallAreaHighContrast) {
+    return "The bruise covers a smaller area, but a darker focal region is still visible. The overall intensity is interpreted as Mild.";
+  }
+  return concentratedCore
+    ? "The bruise still contains a small darker core, but the overall appearance remains relatively light. The overall intensity is interpreted as Mild."
+    : "The selected bruise appears relatively light overall. The overall intensity is interpreted as Mild.";
+}
+
 function stageBarColor(stage: StageKey) {
   switch (stage) {
     case "red":
@@ -200,20 +242,21 @@ function getHealingMessage(expectedStage: StageKey, visualStage: StageKey) {
   const expectedIndex = stageOrder.indexOf(expectedStage);
   const visualIndex = stageOrder.indexOf(visualStage);
   const delta = visualIndex - expectedIndex;
+  const distance = Math.abs(delta);
 
-  if (delta === 0) {
+  if (distance <= 1) {
     return `Healing appears broadly in line with the reported timing. The current visual stage is close to the expected ${stageLabel(expectedStage)} stage.`;
   }
-  if (delta === 1) {
+  if (delta >= 2 && distance === 2) {
     return `Healing appears slightly later in the healing sequence than expected. The current visual stage looks somewhat more advanced than the expected ${stageLabel(expectedStage)} stage.`;
   }
-  if (delta >= 2) {
-    return `Healing appears noticeably later in the healing sequence than expected. The current visual stage looks more advanced than the expected ${stageLabel(expectedStage)} stage for the reported timing.`;
-  }
-  if (delta === -1) {
+  if (delta <= -2 && distance === 2) {
     return `Healing appears slightly slower than expected. The current visual stage looks somewhat earlier in the healing sequence than the expected ${stageLabel(expectedStage)} stage.`;
   }
-  return `Healing appears slower than expected. The current visual stage looks earlier in the healing sequence than the expected ${stageLabel(expectedStage)} stage for the reported timing.`;
+  if (delta > 0) {
+    return `Healing appears noticeably later in the healing sequence than expected. The current visual stage looks more advanced than the expected ${stageLabel(expectedStage)} stage for the reported timing.`;
+  }
+  return `Healing appears noticeably slower than expected. The current visual stage looks earlier in the healing sequence than the expected ${stageLabel(expectedStage)} stage for the reported timing.`;
 }
 
 function getPointerLeft(stage: StageKey) {
@@ -257,6 +300,184 @@ function computeJaccard(a: Uint8Array, b: Uint8Array) {
   return union === 0 ? 0 : intersection / union;
 }
 
+
+function buildConsensusMask(savedPassMasks: Uint8Array[]) {
+  const mask = new Uint8Array(CANVAS_SIZE * CANVAS_SIZE);
+  const requiredVotes = Math.max(1, Math.ceil(savedPassMasks.length / 2));
+  for (let i = 0; i < mask.length; i++) {
+    let total = 0;
+    for (const saved of savedPassMasks) total += saved[i] ? 1 : 0;
+    mask[i] = total >= requiredVotes ? 1 : 0;
+  }
+  return mask;
+}
+
+function getMaskBounds(mask: Uint8Array) {
+  let minX = CANVAS_SIZE;
+  let maxX = 0;
+  let minY = CANVAS_SIZE;
+  let maxY = 0;
+  let sumX = 0;
+  let sumY = 0;
+  let count = 0;
+
+  for (let i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue;
+    const x = i % CANVAS_SIZE;
+    const y = Math.floor(i / CANVAS_SIZE);
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    sumX += x;
+    sumY += y;
+    count++;
+  }
+
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    centroidX: count > 0 ? sumX / count : CANVAS_SIZE / 2,
+    centroidY: count > 0 ? sumY / count : CANVAS_SIZE / 2,
+    count,
+  };
+}
+
+function count8Neighbors(mask: Uint8Array, x: number, y: number) {
+  let total = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || nx >= CANVAS_SIZE || ny < 0 || ny >= CANVAS_SIZE) continue;
+      total += mask[ny * CANVAS_SIZE + nx] ? 1 : 0;
+    }
+  }
+  return total;
+}
+
+function smoothMask(mask: Uint8Array, passes = 1) {
+  let current = new Uint8Array(mask);
+  for (let p = 0; p < passes; p++) {
+    const next = new Uint8Array(current);
+    for (let y = 1; y < CANVAS_SIZE - 1; y++) {
+      for (let x = 1; x < CANVAS_SIZE - 1; x++) {
+        const idx = y * CANVAS_SIZE + x;
+        const neighbors = count8Neighbors(current, x, y);
+        if (current[idx]) {
+          next[idx] = neighbors >= 2 ? 1 : 0;
+        } else {
+          next[idx] = neighbors >= 5 ? 1 : 0;
+        }
+      }
+    }
+    current = next;
+  }
+  return current;
+}
+
+function refineBruiseMask(baseMask: Uint8Array, pixels: Uint8ClampedArray) {
+  const baseCount = countMask(baseMask);
+  if (baseCount === 0) return baseMask;
+
+  const { minX, maxX, minY, maxY, centroidX, centroidY } = getMaskBounds(baseMask);
+  const selectionRadius = Math.max(34, Math.hypot(maxX - minX, maxY - minY) * 0.42);
+
+  const scoreMap = new Float32Array(baseMask.length);
+  let scoreSum = 0;
+  let scoreCount = 0;
+  let maxScore = 0;
+
+  const hueDistance = (a: number, b: number) => {
+    const d = Math.abs(a - b) % 360;
+    return d > 180 ? 360 - d : d;
+  };
+
+  const closeness = (h: number, center: number, width: number) => clamp(1 - hueDistance(h, center) / width, 0, 1);
+
+  for (let i = 0; i < baseMask.length; i++) {
+    if (!baseMask[i]) continue;
+    const x = i % CANVAS_SIZE;
+    const y = Math.floor(i / CANVAS_SIZE);
+    const idx = i * 4;
+    const r = pixels[idx] / 255;
+    const g = pixels[idx + 1] / 255;
+    const b = pixels[idx + 2] / 255;
+    const maxCh = Math.max(r, g, b);
+    const minCh = Math.min(r, g, b);
+    const spread = maxCh - minCh;
+    const { h, s, v } = rgbToHsv(r, g, b);
+
+    const centerWeight = 1 - clamp(Math.hypot(x - centroidX, y - centroidY) / selectionRadius, 0, 1);
+    const darkness = clamp((0.82 - v) / 0.52, 0, 1);
+    const saturation = clamp((s - 0.04) / 0.34, 0, 1);
+    const chroma = clamp((spread - 0.04) / 0.26, 0, 1);
+    const stageAffinity = Math.max(
+      closeness(h, 2, 20) * 0.78,
+      closeness(h, 232, 36) * 0.8,
+      Math.max(closeness(h, 285, 48), closeness(h, 320, 36) * 0.72),
+      closeness(h, 28, 26),
+      closeness(h, 58, 26) * 0.9
+    );
+
+    const highlightPenalty = v > 0.9 && s < 0.08 ? 0.24 : 0;
+    const flatSkinPenalty = saturation < 0.12 && chroma < 0.12 ? 0.18 : 0;
+    const oversatPenalty = v > 0.82 && h > 10 && h < 28 ? 0.08 : 0;
+
+    const score = clamp(
+      stageAffinity * 0.36 +
+      darkness * 0.22 +
+      saturation * 0.18 +
+      chroma * 0.14 +
+      centerWeight * 0.1 -
+      highlightPenalty -
+      flatSkinPenalty -
+      oversatPenalty,
+      0,
+      1
+    );
+
+    scoreMap[i] = score;
+    scoreSum += score;
+    scoreCount++;
+    if (score > maxScore) maxScore = score;
+  }
+
+  if (scoreCount === 0) return baseMask;
+
+  const meanScore = scoreSum / scoreCount;
+  const adaptiveThreshold = clamp(Math.max(meanScore + 0.06, maxScore * 0.46), 0.16, 0.54);
+
+  let refined = new Uint8Array(baseMask.length);
+  for (let i = 0; i < baseMask.length; i++) {
+    if (!baseMask[i]) continue;
+    const idx = i * 4;
+    const r = pixels[idx] / 255;
+    const g = pixels[idx + 1] / 255;
+    const b = pixels[idx + 2] / 255;
+    const maxCh = Math.max(r, g, b);
+    const minCh = Math.min(r, g, b);
+    const spread = maxCh - minCh;
+    const { s, v } = rgbToHsv(r, g, b);
+    const darkCoreKeep = v < 0.48 && s > 0.08;
+    const bruiseKeep = scoreMap[i] >= adaptiveThreshold;
+    const chromaKeep = v < 0.72 && spread > 0.08 && s > 0.07;
+    refined[i] = bruiseKeep || darkCoreKeep || chromaKeep ? 1 : 0;
+  }
+
+  refined = smoothMask(refined, 2);
+  const refinedCount = countMask(refined);
+
+  if (refinedCount < Math.max(48, Math.floor(baseCount * 0.18))) {
+    return smoothMask(baseMask, 1);
+  }
+
+  return refined;
+}
+
 async function loadImageElement(src: string) {
   return await new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
@@ -289,47 +510,17 @@ async function computeAnalysis(params: {
   ctx.drawImage(img, dx, dy, drawWidth, drawHeight);
   const pixels = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE).data;
 
-  const mask = new Uint8Array(CANVAS_SIZE * CANVAS_SIZE);
-  for (let i = 0; i < mask.length; i++) {
-    let total = 0;
-    for (const saved of savedPassMasks) total += saved[i] ? 1 : 0;
-    mask[i] = total >= Math.max(1, Math.ceil(savedPassMasks.length / 2)) ? 1 : 0;
-  }
+  const baseConsensusMask = buildConsensusMask(savedPassMasks);
+  const mask = refineBruiseMask(baseConsensusMask, pixels);
 
   const stageRaw: Record<StageKey, number> = { red: 0.001, blue: 0.001, purple: 0.001, brown: 0.001, yellow: 0.001 };
   const stageCoverage: Record<StageKey, number> = { red: 0, blue: 0, purple: 0, brown: 0, yellow: 0 };
 
-  let centroidSumX = 0;
-  let centroidSumY = 0;
-  let centroidCount = 0;
-  let minMaskX = CANVAS_SIZE;
-  let maxMaskX = 0;
-  let minMaskY = CANVAS_SIZE;
-  let maxMaskY = 0;
-
-  for (let i = 0; i < mask.length; i++) {
-    if (!mask[i]) continue;
-    const x = i % CANVAS_SIZE;
-    const y = Math.floor(i / CANVAS_SIZE);
-    centroidSumX += x;
-    centroidSumY += y;
-    centroidCount++;
-    if (x < minMaskX) minMaskX = x;
-    if (x > maxMaskX) maxMaskX = x;
-    if (y < minMaskY) minMaskY = y;
-    if (y > maxMaskY) maxMaskY = y;
-  }
-
-  const centroidX = centroidCount > 0 ? centroidSumX / centroidCount : CANVAS_SIZE / 2;
-  const centroidY = centroidCount > 0 ? centroidSumY / centroidCount : CANVAS_SIZE / 2;
-  const selectionRadius =
-    centroidCount > 0
-      ? Math.max(36, Math.hypot(maxMaskX - minMaskX, maxMaskY - minMaskY) * 0.42)
-      : CANVAS_SIZE * 0.25;
-
   let count = 0;
   let bruiseLike = 0;
   let coreCount = 0;
+  let deepCoreCount = 0;
+  let peakContrast = 0;
   let sumV = 0;
   let sumS = 0;
   let sumSpread = 0;
@@ -344,8 +535,6 @@ async function computeAnalysis(params: {
 
   for (let i = 0; i < mask.length; i++) {
     if (!mask[i]) continue;
-    const x = i % CANVAS_SIZE;
-    const y = Math.floor(i / CANVAS_SIZE);
     const idx = i * 4;
     const r = pixels[idx] / 255;
     const g = pixels[idx + 1] / 255;
@@ -361,8 +550,9 @@ async function computeAnalysis(params: {
     sumS += s;
     sumSpread += spread;
     sumContrast += contrast;
-
-    if (v < 0.4) coreCount++;
+    if (contrast > peakContrast) peakContrast = contrast;
+    if (v < 0.42) coreCount++;
+    if (v < 0.32) deepCoreCount++;
 
     const darkFactor = clamp((0.82 - v) / 0.55, 0, 1);
     const midDarkFactor = clamp((0.72 - v) / 0.42, 0, 1);
@@ -376,25 +566,22 @@ async function computeAnalysis(params: {
     const redLike = closeness(h, 2, 18) * satFactor * clamp((0.74 - v) / 0.34, 0, 1) * (0.4 + 0.6 * redDominance) * yellowSafe * brownSafe;
     const blueLike = closeness(h, 232, 34) * satFactor * clamp((0.8 - v) / 0.46, 0, 1) * (0.35 + 0.65 * blueDominance);
     const purpleLike = Math.max(closeness(h, 285, 44), closeness(h, 320, 34) * 0.72) * satFactor * (0.45 + 0.55 * darkFactor);
-    const brownLike = closeness(h, 28, 24) * clamp((0.84 - v) / 0.56, 0, 1) * clamp((s - 0.02) / 0.3, 0, 1);
-    const yellowLike = closeness(h, 58, 24) * brightFactor * clamp((s - 0.03) / 0.28, 0, 1);
+    const brownLike =
+      closeness(h, 28, 24) *
+      clamp((0.82 - v) / 0.5, 0, 1) *
+      clamp((s - 0.015) / 0.22, 0, 1) *
+      (0.72 + 0.28 * clamp((0.62 - v) / 0.22, 0, 1));
+    const yellowLike =
+      closeness(h, 58, 24) *
+      clamp((v - 0.48) / 0.3, 0, 1) *
+      clamp((s - 0.02) / 0.18, 0, 1) *
+      (0.74 + 0.26 * clamp((v - 0.62) / 0.18, 0, 1)) *
+      (1 - clamp((0.44 - v) / 0.14, 0, 1));
 
-    const distanceNorm = clamp(Math.hypot(x - centroidX, y - centroidY) / selectionRadius, 0, 1);
-    const centerWeight = 1.32 - distanceNorm * 0.42;
-    const coreWeight = v < 0.45 ? 1.42 : v < 0.55 ? 1.18 : 1;
-    const purpleCoreBoost = v < 0.45 ? 1.14 : 1;
-    const blueCoreBoost = v < 0.45 ? 1.08 : 1;
-    const brownCoreBoost = v < 0.5 ? 1.06 : 1;
-    const redCoreSoftener = v < 0.45 ? 0.86 : v < 0.55 ? 0.93 : 1;
-    const redCenterSoftener = 1 - (centerWeight - 1) * 0.55;
-    const purpleCenterBoost = 1 + (centerWeight - 1) * 0.95;
-    const blueCenterBoost = 1 + (centerWeight - 1) * 0.45;
-    const brownCenterBoost = 1 + (centerWeight - 1) * 0.32;
-
-    stageRaw.red += redLike * coreWeight * redCoreSoftener * redCenterSoftener;
-    stageRaw.blue += blueLike * coreWeight * blueCoreBoost * blueCenterBoost;
-    stageRaw.purple += purpleLike * coreWeight * purpleCoreBoost * purpleCenterBoost;
-    stageRaw.brown += brownLike * coreWeight * brownCoreBoost * brownCenterBoost;
+    stageRaw.red += redLike;
+    stageRaw.blue += blueLike;
+    stageRaw.purple += purpleLike;
+    stageRaw.brown += brownLike;
     stageRaw.yellow += yellowLike;
 
     if (redLike > 0.18) stageCoverage.red++;
@@ -414,6 +601,8 @@ async function computeAnalysis(params: {
   const avgContrast = sumContrast / count;
   const bruiseLikeRatio = bruiseLike / count;
   const coreDensity = coreCount / count;
+  const deepCoreDensity = deepCoreCount / count;
+  const areaRatio = count / mask.length;
 
   const coverageRatio = {
     red: stageCoverage.red / count,
@@ -452,6 +641,19 @@ async function computeAnalysis(params: {
     stageRaw.brown *= 1.02;
     stageRaw.yellow *= 1.12;
   }
+  if (coverageRatio.yellow > 0.1 && avgBrightness > 0.58) {
+    stageRaw.yellow *= 1.22;
+    stageRaw.brown *= 0.94;
+  }
+
+  if (coverageRatio.brown > 0.1 && coverageRatio.yellow > 0.08 && avgBrightness < 0.6) {
+    stageRaw.brown *= 1.1;
+  }
+
+  if (coverageRatio.yellow > 0.08 && coverageRatio.brown > 0.08 && avgBrightness > 0.62) {
+    stageRaw.yellow *= 1.14;
+    stageRaw.brown *= 0.9;
+  }
 
   if (coverageRatio.blue > 0.08 && coverageRatio.purple > 0.1) {
     stageRaw.blue *= 1.08;
@@ -475,49 +677,95 @@ async function computeAnalysis(params: {
     stageRaw.red *= 0.7;
     stageRaw.purple *= 1.08;
   }
+  if (coverageRatio.yellow > 0.14 && coverageRatio.purple < 0.06 && avgBrightness > 0.57) {
+    stageRaw.yellow *= 1.16;
+    stageRaw.brown *= 0.92;
+  }
 
-  if (coverageRatio.red > 0.22 && coverageRatio.purple > 0.035 && coreDensity > 0.08) {
+  if (coverageRatio.brown > 0.14 && coverageRatio.yellow > 0.14 && avgBrightness > 0.54 && avgBrightness < 0.68) {
+    stageRaw.brown *= 1.06;
+    stageRaw.yellow *= 1.06;
+  }
+
+  const mixedLargeMask = count / (CANVAS_SIZE * CANVAS_SIZE) >= 0.08;
+  const veryLargeMask = count / (CANVAS_SIZE * CANVAS_SIZE) >= 0.12;
+  const warmMixedEvidence = coverageRatio.brown >= 0.12 || coverageRatio.yellow >= 0.08;
+  const nonRedCoverage = coverageRatio.purple + coverageRatio.brown + coverageRatio.yellow;
+
+  if (mixedLargeMask && warmMixedEvidence && nonRedCoverage >= 0.18 && avgBrightness < 0.68) {
+    stageRaw.red *= 0.64;
+    stageRaw.brown *= 1.12;
+    if (coverageRatio.yellow >= 0.08) stageRaw.yellow *= 1.08;
+  }
+
+  if (mixedLargeMask && coverageRatio.red >= 0.1 && coverageRatio.brown >= 0.12 && avgContrast < 0.36) {
+    stageRaw.red *= 0.64;
+    stageRaw.brown *= 1.12;
+  }
+
+  if (mixedLargeMask && coverageRatio.red >= 0.14 && coverageRatio.yellow >= 0.06 && avgBrightness > 0.44) {
+    stageRaw.red *= 0.56;
+    stageRaw.brown *= 1.08;
+    stageRaw.yellow *= 1.1;
+  }
+
+  if (mixedLargeMask && coverageRatio.red >= 0.12 && coverageRatio.purple < 0.08 && coverageRatio.brown >= 0.1) {
     stageRaw.red *= 0.62;
-    stageRaw.purple *= 1.22;
+    stageRaw.brown *= 1.1;
   }
 
-  if (coverageRatio.red > 0.3 && avgBrightness < 0.58 && avgSaturation > 0.14 && coreDensity > 0.12) {
-    stageRaw.red *= 0.58;
-    stageRaw.purple *= 1.18;
-    stageRaw.blue *= 1.04;
-  }
+  const strongMixedNonRed =
+    mixedLargeMask &&
+    coverageRatio.red >= 0.1 &&
+    (coverageRatio.purple + coverageRatio.brown + coverageRatio.yellow) >= 0.16;
 
-  if (coverageRatio.red > 0.26 && coverageRatio.brown < 0.06 && coverageRatio.yellow < 0.06 && avgBrightness < 0.54 && coreDensity > 0.14) {
-    stageRaw.red *= 0.54;
-    stageRaw.purple *= 1.26;
-  }
-
-  const nonRedMixRaw = stageRaw.blue + stageRaw.purple + stageRaw.brown + stageRaw.yellow;
-  const warmTransitionRaw = stageRaw.purple + stageRaw.brown + stageRaw.yellow;
-
-  if (
-    stageRaw.red > nonRedMixRaw * 0.55 &&
-    warmTransitionRaw > stageRaw.red * 0.42 &&
-    coreDensity > 0.06
-  ) {
-    stageRaw.red *= 0.58;
-    if (stageRaw.purple >= stageRaw.brown) {
-      stageRaw.purple *= 1.18;
-    }
-    if (stageRaw.brown >= stageRaw.purple * 0.72 || coverageRatio.yellow > 0.06) {
-      stageRaw.brown *= 1.14;
-      stageRaw.yellow *= 1.06;
+  if (strongMixedNonRed) {
+    const nonRedBlend = coverageRatio.purple + coverageRatio.brown + coverageRatio.yellow;
+    const redPenalty =
+      coverageRatio.brown >= 0.12 || coverageRatio.yellow >= 0.08
+        ? 0.5
+        : coverageRatio.purple >= 0.1
+        ? 0.56
+        : 0.64;
+    stageRaw.red *= redPenalty;
+    if (coverageRatio.brown >= 0.1) stageRaw.brown *= 1.14;
+    if (coverageRatio.purple >= 0.09) stageRaw.purple *= 1.12;
+    if (coverageRatio.yellow >= 0.08) stageRaw.yellow *= 1.1;
+    if (nonRedBlend >= 0.26 && avgContrast < 0.36) {
+      stageRaw.red *= 0.78;
     }
   }
 
   if (
-    stageRaw.red > stageRaw.purple * 1.35 &&
-    coverageRatio.red > 0.18 &&
-    coverageRatio.purple > 0.03 &&
-    avgBrightness < 0.62
+    mixedLargeMask &&
+    coverageRatio.red >= 0.14 &&
+    coverageRatio.purple >= 0.08 &&
+    coverageRatio.brown >= 0.08
   ) {
-    stageRaw.red *= 0.72;
-    stageRaw.purple *= 1.12;
+    stageRaw.red *= 0.5;
+    stageRaw.purple *= 1.14;
+    stageRaw.brown *= 1.14;
+  }
+
+  if (
+    mixedLargeMask &&
+    coverageRatio.red >= 0.12 &&
+    coverageRatio.yellow >= 0.06 &&
+    coverageRatio.brown >= 0.1
+  ) {
+    stageRaw.red *= 0.48;
+    stageRaw.brown *= 1.16;
+    stageRaw.yellow *= 1.12;
+  }
+
+  if (veryLargeMask && coverageRatio.red >= 0.12 && nonRedCoverage >= 0.14) {
+    stageRaw.red *= 0.74;
+    if (coverageRatio.brown >= 0.08) stageRaw.brown *= 1.08;
+    if (coverageRatio.purple >= 0.08) stageRaw.purple *= 1.06;
+  }
+
+  if (veryLargeMask && coverageRatio.red >= 0.14 && warmMixedEvidence) {
+    stageRaw.red *= 0.68;
   }
 
   const stageScores = normalizeStageScores(stageRaw);
@@ -529,9 +777,17 @@ async function computeAnalysis(params: {
   let visualStage: StageKey = topStage;
 
   const purpleStrong = stageScores.purple >= 0.34;
-  const purpleNearTop = stageScores.purple >= topScore * 0.82;
+  const purpleNearTop = stageScores.purple >= topScore * 0.84;
   const purpleCoverageStrong = coverageRatio.purple >= 0.09;
-  const redClearlyDominant = stageScores.red >= 0.5 && stageScores.red - Math.max(stageScores.purple, stageScores.brown) >= 0.16 && coreDensity < 0.16 && coverageRatio.purple < 0.07 && coverageRatio.brown < 0.08;
+  const redClearlyDominant =
+    stageScores.red >= 0.62 &&
+    stageScores.red - Math.max(stageScores.purple, stageScores.brown, stageScores.yellow) >= 0.24 &&
+    coverageRatio.red >= 0.14 &&
+    coverageRatio.purple < 0.06 &&
+    coverageRatio.brown < 0.08 &&
+    coverageRatio.yellow < 0.04 &&
+    areaRatio < 0.07 &&
+    !mixedLargeMask;
   const brownClearlyDominant =
     stageScores.brown >= 0.38 &&
     stageScores.yellow >= 0.12 &&
@@ -540,7 +796,35 @@ async function computeAnalysis(params: {
   if (topStage === "purple") {
     visualStage = "purple";
   } else if (topStage === "red") {
-    visualStage = !redClearlyDominant && (purpleStrong || purpleNearTop || purpleCoverageStrong) ? "purple" : "red";
+    const mixedRedOverrideToBrown =
+      (mixedLargeMask || areaRatio >= 0.06) &&
+      stageScores.brown >= 0.2 &&
+      stageScores.red - stageScores.brown <= 0.26 &&
+      (coverageRatio.brown >= 0.09 || coverageRatio.yellow >= 0.06);
+
+    const mixedRedOverrideToPurple =
+      (mixedLargeMask || areaRatio >= 0.05) &&
+      stageScores.purple >= 0.18 &&
+      stageScores.red - stageScores.purple <= 0.22 &&
+      coverageRatio.purple >= 0.07;
+
+    const largeRedOverrideToBrown =
+      areaRatio >= 0.08 &&
+      stageScores.brown >= 0.24 &&
+      stageScores.red - stageScores.brown <= 0.3;
+
+    const largeRedOverrideToPurple =
+      areaRatio >= 0.08 &&
+      stageScores.purple >= 0.22 &&
+      stageScores.red - stageScores.purple <= 0.26;
+
+    if (mixedRedOverrideToBrown || largeRedOverrideToBrown) {
+      visualStage = "brown";
+    } else if (mixedRedOverrideToPurple || largeRedOverrideToPurple || (!redClearlyDominant && (purpleStrong || purpleNearTop || purpleCoverageStrong))) {
+      visualStage = "purple";
+    } else {
+      visualStage = "red";
+    }
   } else if (topStage === "brown") {
     visualStage = brownClearlyDominant ? "brown" : (purpleStrong || purpleNearTop || purpleCoverageStrong ? "purple" : "brown");
   } else if (topStage === "yellow") {
@@ -550,16 +834,26 @@ async function computeAnalysis(params: {
   }
 
   const expectedStage = getExpectedStage(selectedAge);
-  const darknessScore = 1 - avgBrightness;
-  const saturationScore = avgSaturation;
-  const stageBoost =
-    visualStage === "purple" || visualStage === "blue"
-      ? 1.05
-      : visualStage === "yellow"
-      ? 0.85
-      : 1;
+  const darkness = 1 - avgBrightness;
+  const maskRatio = count / (CANVAS_SIZE * CANVAS_SIZE);
+  const concentratedCore = coreDensity >= 0.12 && avgContrast >= 0.16 && darkness >= 0.24;
+  const smallAreaHighContrast = maskRatio <= 0.11 && avgContrast >= 0.18 && darkness >= 0.2;
 
-  const intensityScore = clamp((darknessScore * 0.5 + saturationScore * 0.3 + coreDensity * 0.2) * stageBoost, 0, 1);
+  const intensityBase = darkness * 0.46 + avgSaturation * 0.16 + avgSpread * 0.15 + avgContrast * 0.1 + bruiseLikeRatio * 0.08;
+  const concentratedBoost = concentratedCore ? 0.06 : 0;
+  const smallAreaBoost = smallAreaHighContrast ? 0.05 : 0;
+  const yellowSoftener = stageScores.yellow >= 0.3 && stageScores.brown >= 0.25 ? -0.03 : 0;
+  const diffuseBrownSoftener =
+    stageScores.brown >= 0.5 &&
+    stageScores.yellow < 0.18 &&
+    !concentratedCore &&
+    avgContrast < 0.22 &&
+    avgSaturation < 0.22
+      ? -0.04
+      : stageScores.brown >= 0.6 && !concentratedCore && avgContrast < 0.2
+      ? -0.02
+      : 0;
+  const intensityScore = clamp(intensityBase + concentratedBoost + smallAreaBoost + yellowSoftener + diffuseBrownSoftener, 0, 1);
   const intensityLabel = getIntensityLabel(intensityScore);
 
   let consistencyScore = 1;
@@ -583,12 +877,9 @@ async function computeAnalysis(params: {
     intensityLabel,
     consistencyScore,
     consistencyLabel,
-    visualSummary: `The image most closely matches the ${stageLabel(visualStage)} stage.`,
-    intensitySummary: `Primary stage coverage is ${(topScore * 100).toFixed(0)}%, with ${(secondScore * 100).toFixed(0)}% secondary mixing. The bruise shows ${intensityLabel.toLowerCase()} intensity with ${coreDensity > 0.25 ? "a concentrated dark core" : "a more diffuse pattern"}.`,
+    visualSummary: getVisualSummary(visualStage, stageScores),
+    intensitySummary: getIntensitySummary(intensityLabel, { concentratedCore, smallAreaHighContrast }),
     consistencySummary: `This reflects how similar your bruise boundary selections were across repeated passes. The current result is ${consistencyLabel.toLowerCase()}, based on overlap across saved passes.`,
-    dominantRatio: topScore,
-    secondaryRatio: secondScore,
-    coreDensity,
   } satisfies AnalysisData;
 }
 
