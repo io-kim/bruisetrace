@@ -1,15 +1,15 @@
 # BruiseTrace
 
-**Inclusive skin signal measurement system for bruise analysis**
+Inclusive skin signal measurement system for bruise analysis
 
 BruiseTrace is a web-based tool designed to analyze bruise color stages, intensity, and healing progression using a user-guided selection approach.  
-It emphasizes **inclusive skin representation**, **visual interpretability**, and **human-in-the-loop analysis**.
+It emphasizes inclusive skin representation, visual interpretability, and human-in-the-loop analysis.
 
 ---
 
-## 🧠 Core Concept
+## Core Concept
 
-- Users manually select the bruise region using a **brush-based interface**
+- Users manually select the bruise region using a brush-based interface
 - Multiple passes (Tight / Balanced / Broad) improve reliability
 - The system analyzes:
   - Color stage (Red → Blue → Purple → Brown → Yellow → Resolved)
@@ -18,44 +18,36 @@ It emphasizes **inclusive skin representation**, **visual interpretability**, an
 
 ---
 
-## ⚙️ Key Features
+## Key Features
 
-- 🖌️ Guided ROI selection (3-pass system)
-- 🎨 Color stage classification (HSV-based)
-- 📊 Bruise intensity estimation
-- 📐 Selection consistency scoring
-- 📉 Healing interpretation vs expected timeline
+- Guided ROI selection (3-pass system)
+- Color stage classification (HSV-based)
+- Bruise intensity estimation
+- Selection consistency scoring
+- Healing interpretation vs expected timeline
 
 ---
 
-## 📸 Example Analysis Results
+## Example Analysis Results
 
 ### 1. Guided Selection
-![Info Flow](screenshots/info_flow.png)
-
----
+![Info Flow](https://raw.githubusercontent.com/io-kim/bruisetrace/main/public/screenshots/info_flow.png)
 
 ### 2. Very Strong Intensity
-![Very Strong](screenshots/analysis_very_strong.png)
-
----
+![Very Strong](https://raw.githubusercontent.com/io-kim/bruisetrace/main/public/screenshots/analysis_very_strong.png)
 
 ### 3. Strong Brown Stage
-![Strong Brown](screenshots/analysis_strong_brown.png)
-
----
+![Strong Brown](https://raw.githubusercontent.com/io-kim/bruisetrace/main/public/screenshots/analysis_strong_brown.png)
 
 ### 4. Stage Mismatch
-![Mismatch](screenshots/analysis_mismatch_red.png)
-
----
+![Mismatch](https://raw.githubusercontent.com/io-kim/bruisetrace/main/public/screenshots/analysis_mismatch_red.png)
 
 ### 5. Transition Stage
-![Transition](screenshots/analysis_transition.png)
+![Transition](https://raw.githubusercontent.com/io-kim/bruisetrace/main/public/screenshots/analysis_transition.png)
 
 ---
 
-## 🚀 Tech Stack
+## Tech Stack
 
 - Next.js
 - TypeScript
@@ -63,12 +55,12 @@ It emphasizes **inclusive skin representation**, **visual interpretability**, an
 
 ---
 
-## 📌 Version
+## Version
 
 v0.6
 
 ---
 
-## 🌐 Live Demo
+## Live Demo
 
 https://bruisetrace.vercel.app
