@@ -839,21 +839,27 @@ async function computeAnalysis(params: {
   const concentratedCore = coreDensity >= 0.12 && avgContrast >= 0.16 && darkness >= 0.24;
   const smallAreaHighContrast = maskRatio <= 0.11 && avgContrast >= 0.18 && darkness >= 0.2;
 
-  const intensityBase = darkness * 0.46 + avgSaturation * 0.16 + avgSpread * 0.15 + avgContrast * 0.1 + bruiseLikeRatio * 0.08;
-  const concentratedBoost = concentratedCore ? 0.06 : 0;
-  const smallAreaBoost = smallAreaHighContrast ? 0.05 : 0;
-  const yellowSoftener = stageScores.yellow >= 0.3 && stageScores.brown >= 0.25 ? -0.03 : 0;
-  const diffuseBrownSoftener =
-    stageScores.brown >= 0.5 &&
-    stageScores.yellow < 0.18 &&
-    !concentratedCore &&
-    avgContrast < 0.22 &&
-    avgSaturation < 0.22
-      ? -0.04
-      : stageScores.brown >= 0.6 && !concentratedCore && avgContrast < 0.2
-      ? -0.02
-      : 0;
-  const intensityScore = clamp(intensityBase + concentratedBoost + smallAreaBoost + yellowSoftener + diffuseBrownSoftener, 0, 1);
+  const coverageBoost = Math.min(0.25, areaRatio * 1.2);
+  const coreBoost = coreDensity * 0.4 + deepCoreDensity * 0.3;
+  const contrastBoost = avgContrast * 0.25;
+  const saturationBoost = avgSaturation * 0.15;
+  const darknessBoost = darkness * 0.5;
+
+  let intensityScore = darknessBoost + contrastBoost + saturationBoost + coverageBoost + coreBoost;
+
+  if (areaRatio < 0.08 && (avgContrast > 0.2 || darkness > 0.28 || coreDensity > 0.12)) {
+    intensityScore += 0.12;
+  }
+
+  if (areaRatio < 0.1 && deepCoreDensity > 0.05 && avgContrast > 0.18) {
+    intensityScore += 0.08;
+  }
+
+  if (areaRatio > 0.12 && darkness > 0.25) intensityScore += 0.1;
+
+  if (stageScores.yellow > 0.4) intensityScore -= 0.08;
+
+  intensityScore = clamp(intensityScore, 0, 1);
   const intensityLabel = getIntensityLabel(intensityScore);
 
   let consistencyScore = 1;
